@@ -34,7 +34,7 @@ demo/        # CLI + frontend demo (file upload → storage → payment)
 
 * [Node.js >= 20](https://nodejs.org/en/) and [pnpm](https://pnpm.io/installation)
 * [Docker](https://www.docker.com/) (for n8n + local test services)
-* [Synapse SDK](https://docs.filecoin.io/synapse/) (installed as npm dependency)
+* [Synapse SDK](https://github.com/FilOzone/synapse-sdk) (installed as npm dependency)
 * [Filecoin Calibration Wallet](https://faucet.calibration.fildev.network/) with test USDFC tokens
 
 ---
