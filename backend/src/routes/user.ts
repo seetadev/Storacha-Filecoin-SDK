@@ -4,3 +4,4 @@ export const userRouter = Router();
 
 userRouter.get("/getUserUploadHistory", userController.GetUserUploadHistory);
 userRouter.post("/createDelegation", userController.CreateDelegation);
+//userRouter.post("/uploadFileEntry");//

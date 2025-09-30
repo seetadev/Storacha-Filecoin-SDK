@@ -60,3 +60,11 @@ export const CreateDelegation = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ *
+ */
+export const SaveFileUploadToDb = async (req: Request, res: Response) => {
+  try {
+  } catch (err) {}
+};
