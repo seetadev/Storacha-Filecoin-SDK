@@ -2,7 +2,7 @@
 
 **Storacha Onchain Payments** is a proof-of-concept system enabling **per-file, pay-as-you-go decentralized storage payments on Filecoin**.
 Users pay with **USDFC on the Filecoin Calibration Testnet**, while a storage provider account underwrites warm storage using the **Synapse SDK**.
-This monorepo contains the **Filecoin Storage + Payment Contracts**, **Backend API**, and **TypeScript SDK**.
+This monorepo contains the **Filecoin & Storacha Storage + Payment Contracts**, **Backend API**, and **TypeScript SDK**.
 
 ---
 
