@@ -1,0 +1,32 @@
+{
+  "name": "@storacha/contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for Storacha Filecoin SDK - file registry and payment escrow",
+  "license": "MIT",
+  "author": "Storacha",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
+    "deploy:local": "hardhat run scripts/deploy.js --network hardhat",
+    "deploy:calibration": "hardhat run scripts/deploy.js --network calibration",
+    "verify": "hardhat verify",
+    "clean": "hardhat clean",
+    "size": "hardhat size-contracts"
+  },
+  "keywords": [
+    "filecoin",
+    "storage",
+    "payments",
+    "escrow",
+    "web3"
+  ],
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.4.0",
+    "dotenv": "^16.6.1",
+    "hardhat": "^2.27.1"
+  }
+}
