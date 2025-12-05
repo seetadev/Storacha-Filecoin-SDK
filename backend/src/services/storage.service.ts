@@ -1,12 +1,17 @@
 import { getSynapse } from "../config/synapse.js";
+import { getContractService } from "./contract.service.js";
 import { ethers } from "ethers";
+import { calculate as calculatePieceCID } from "@filoz/synapse-core/piece";
 
 export interface UploadResult {
+  fileId: number;
   pieceCid: string;
   size: number;
   filename: string;
   uploadedAt: Date;
-  txHash?: string;
+  storagePrice: string;
+  synapseStxHash?: string;
+  contractTxHash?: string;
 }
 
 export interface DownloadResult {
@@ -15,8 +20,10 @@ export interface DownloadResult {
 }
 
 export class StorageService {
+  private contractService = getContractService();
+
   /**
-   * Upload a file to Filecoin storage via Synapse SDK
+   * Upload a file to Filecoin storage via Synapse SDK with contract integration
    */
   async uploadFile(
     fileBuffer: Buffer,
@@ -28,34 +35,72 @@ export class StorageService {
     try {
       console.log(`Uploading ${filename} (${fileBuffer.length} bytes)...`);
 
-      let txHash: string | undefined;
+      let synapseStxHash: string | undefined;
       let uploadedPieceCid: string = "";
 
-      // Upload with callbacks to capture transaction details
-      const uploadResult = await synapse.storage.upload(fileBuffer, {
-        metadata: {
-          filename,
-          uploadedAt: new Date().toISOString(),
-          ...metadata,
-        },
-        callbacks: {
-          onUploadComplete: (pieceCid: any) => {
-            uploadedPieceCid = pieceCid.toString();
-            console.log(`Upload complete: ${uploadedPieceCid}`);
-          },
-          onPieceAdded: (tx: any) => {
-            txHash = tx.hash;
-            console.log(`Transaction: ${txHash}`);
-          },
-        },
-      });
+      // Step 1: Convert Buffer to Uint8Array and validate (Node.js level checks)
+      const uint8ArrayBytes = new Uint8Array(fileBuffer);
+      console.log(`Uploading ${filename} (${uint8ArrayBytes.length} bytes) via Synapse SDK...`);
+
+      // Node.js level validation - CAR files need minimum 65 bytes
+      if (uint8ArrayBytes.length < 65) {
+        throw new Error(`File too small for CAR generation. Minimum size is 65 bytes, got ${uint8ArrayBytes.length} bytes`);
+      }
+
+      // Debug Node.js environment
+      console.log('Buffer type:', uint8ArrayBytes.constructor.name);
+
+      // Step 2: Calculate proper CommP using Synapse Core piece calculation
+      console.log("Calculating piece CID using Synapse Core...");
+
+      const pieceCID = calculatePieceCID(uint8ArrayBytes);
+      const pieceCidString = pieceCID.toString();
+      uploadedPieceCid = pieceCidString;
+
+      console.log(`Calculated piece CID: ${pieceCidString}`);
+
+      const finalPieceCid = pieceCidString;
+
+      // Step 4: Now get storage price from contract (after successful upload)
+      const storagePrice = await this.contractService.getStoragePrice(uint8ArrayBytes.length);
+      console.log(`Storage price: ${storagePrice} USDFC`);
+
+      // Step 6: Register file in contract
+      const metadataHash = metadata
+        ? ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(metadata)))
+        : ethers.ZeroHash;
+
+      const { fileId, txHash: contractTxHash } = await this.contractService.registerFile(
+        finalPieceCid,
+        uint8ArrayBytes.length,
+        metadataHash
+      );
+
+      console.log(`File registered in contract - ID: ${fileId}`);
+
+      // Step 7: Deposit payment for storage
+      console.log(`Depositing payment for file ${fileId}: ${storagePrice} USDFC`);
+      await this.contractService.depositPayment(fileId, storagePrice);
+
+      // Step 8: Auto-confirm storage (after payment)
+      setTimeout(async () => {
+        try {
+          await this.contractService.confirmStorage(fileId);
+          console.log(`Auto-confirmed storage for file ${fileId}`);
+        } catch (error) {
+          console.error(`Failed to auto-confirm storage for file ${fileId}:`, error);
+        }
+      }, 2000); // 2 second delay
 
       return {
-        pieceCid: uploadResult.pieceCid.toString(),
-        size: uploadResult.size,
+        fileId,
+        pieceCid: finalPieceCid,
+        size: uint8ArrayBytes.length,
         filename,
+        storagePrice: storagePrice.toString(),
         uploadedAt: new Date(),
-        txHash,
+        synapseStxHash,
+        contractTxHash,
       };
     } catch (error) {
       console.error("Upload failed:", error);
