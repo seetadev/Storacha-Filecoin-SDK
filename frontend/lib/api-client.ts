@@ -1,11 +1,14 @@
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 export interface UploadResult {
+  fileId: number;
   pieceCid: string;
   size: number;
   filename: string;
   uploadedAt: string;
-  txHash?: string;
+  storagePrice: string;
+  synapseStxHash?: string;
+  contractTxHash?: string;
 }
 
 export interface AccountInfo {
@@ -17,11 +20,22 @@ export interface AccountInfo {
 export interface PreflightCheck {
   canUpload: boolean;
   estimatedCost: string;
+  estimatedCostBreakdown?: {
+    perEpoch: string;
+    perDay: string;
+    perMonth: string;
+  };
   allowance: {
     current: string;
     required: string;
     sufficient: boolean;
   };
+}
+
+export interface SetupResult {
+  success: boolean;
+  depositAmount: string;
+  warmStorageAddress: string;
 }
 
 export class StorageAPIClient {
@@ -113,7 +127,7 @@ export class StorageAPIClient {
     }
 
     const result = await response.json();
-    return result.data;
+    return result.data as SetupResult;
   }
 
   /**

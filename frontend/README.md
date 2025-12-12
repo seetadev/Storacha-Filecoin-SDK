@@ -5,8 +5,10 @@ Next.js frontend application for testing the Filecoin storage backend POC.
 ## Features
 
 - 📤 **File Upload** - Drag & drop or click to upload files to Filecoin
+- 🧾 **On-chain Tracking** - Shows FileRegistry IDs, pricing, and tx hashes from the backend contracts
 - 📥 **File Download** - Retrieve files using Piece CID
 - 💰 **Account Info** - View USDFC balance and allowances
+- 🚀 **One-Time Setup** - Trigger deposit + Warm Storage approval directly from the UI
 - ✅ **Preflight Checks** - Automatic validation before upload
 - 🎨 **Modern UI** - Built with Tailwind CSS
 

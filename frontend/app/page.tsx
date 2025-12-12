@@ -12,7 +12,7 @@ export default function Home() {
             Storacha Filecoin Storage
           </h1>
           <p className="text-gray-600">
-            Upload and download files to Filecoin using the Synapse SDK
+            Upload to Filecoin via Synapse with on-chain FileRegistry + PaymentEscrow tracking
           </p>
         </div>
 

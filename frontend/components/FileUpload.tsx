@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { apiClient, UploadResult } from '@/lib/api-client';
+import { apiClient, PreflightCheck, UploadResult } from '@/lib/api-client';
 
 export default function FileUpload() {
   const [file, setFile] = useState<File | null>(null);
@@ -9,12 +9,37 @@ export default function FileUpload() {
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [preflight, setPreflight] = useState<PreflightCheck | null>(null);
+  const [preflightLoading, setPreflightLoading] = useState(false);
+
+  const runPreflight = async (selectedFile: File) => {
+    setPreflightLoading(true);
+    setPreflight(null);
+    setError(null);
+
+    try {
+      const result = await apiClient.preflightCheck(selectedFile.size);
+      setPreflight(result);
+
+      if (!result.canUpload) {
+        setError(
+          `Allowance is insufficient. Required: ${result.allowance.required} USDFC, Available: ${result.allowance.current} USDFC`
+        );
+      }
+    } catch (err: any) {
+      setError(err.message || 'Preflight check failed');
+    } finally {
+      setPreflightLoading(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selected = e.target.files[0];
+      setFile(selected);
       setUploadResult(null);
       setError(null);
+      runPreflight(selected);
     }
   };
 
@@ -34,9 +59,11 @@ export default function FileUpload() {
     setDragActive(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0]);
+      const selected = e.dataTransfer.files[0];
+      setFile(selected);
       setUploadResult(null);
       setError(null);
+      runPreflight(selected);
     }
   };
 
@@ -48,16 +75,19 @@ export default function FileUpload() {
     setUploadResult(null);
 
     try {
-      // Preflight check
-      const preflight = await apiClient.preflightCheck(file.size);
-      if (!preflight.canUpload) {
-        throw new Error(`Insufficient allowance. Required: ${preflight.allowance.required} USDFC, Available: ${preflight.allowance.current} USDFC`);
+      // Ensure we have a preflight result before uploading
+      const latestPreflight = preflight ?? (await apiClient.preflightCheck(file.size));
+      if (!latestPreflight.canUpload) {
+        throw new Error(
+          `Insufficient allowance. Required: ${latestPreflight.allowance.required} USDFC, Available: ${latestPreflight.allowance.current} USDFC`
+        );
       }
 
       // Upload
       const result = await apiClient.uploadFile(file);
       setUploadResult(result);
       setFile(null);
+      setPreflight(null);
     } catch (err: any) {
       setError(err.message || 'Upload failed');
     } finally {
@@ -118,12 +148,41 @@ export default function FileUpload() {
               <p className="text-sm text-gray-500">{(file.size / 1024).toFixed(2)} KB</p>
             </div>
             <button
-              onClick={() => setFile(null)}
+              onClick={() => {
+                setFile(null);
+                setPreflight(null);
+                setError(null);
+              }}
               className="text-red-600 hover:text-red-800"
               disabled={uploading}
             >
               Remove
             </button>
+          </div>
+
+          {/* Preflight details */}
+          <div className="mt-3 text-sm text-gray-700 space-y-1">
+            {preflightLoading && <p className="text-blue-600">Checking allowance and pricing...</p>}
+            {preflight && (
+              <>
+                <p>
+                  <span className="font-medium">Can upload:</span>{' '}
+                  {preflight.canUpload ? 'Yes' : 'No'}
+                </p>
+                <p>
+                  <span className="font-medium">Estimated cost/epoch:</span>{' '}
+                  {preflight.estimatedCost} USDFC
+                </p>
+                {preflight.estimatedCostBreakdown && (
+                  <p className="text-xs text-gray-500">
+                    Day: {preflight.estimatedCostBreakdown.perDay} USDFC · Month: {preflight.estimatedCostBreakdown.perMonth} USDFC
+                  </p>
+                )}
+                <p className="text-xs text-gray-600">
+                  Allowance: {preflight.allowance.current} / {preflight.allowance.required} USDFC
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -152,6 +211,9 @@ export default function FileUpload() {
           <h3 className="font-semibold text-green-900 mb-2">Upload Successful!</h3>
           <div className="text-sm text-green-800 space-y-1">
             <p>
+              <span className="font-medium">File ID:</span> {uploadResult.fileId}
+            </p>
+            <p>
               <span className="font-medium">Piece CID:</span>
               <code className="ml-2 bg-green-100 px-2 py-1 rounded text-xs break-all">
                 {uploadResult.pieceCid}
@@ -160,10 +222,19 @@ export default function FileUpload() {
             <p>
               <span className="font-medium">Size:</span> {(uploadResult.size / 1024).toFixed(2)} KB
             </p>
-            {uploadResult.txHash && (
+            <p>
+              <span className="font-medium">Storage price:</span> {uploadResult.storagePrice} USDFC
+            </p>
+            {uploadResult.synapseStxHash && (
               <p>
-                <span className="font-medium">Transaction:</span>
-                <code className="ml-2 bg-green-100 px-2 py-1 rounded text-xs">{uploadResult.txHash}</code>
+                <span className="font-medium">Synapse tx:</span>
+                <code className="ml-2 bg-green-100 px-2 py-1 rounded text-xs break-all">{uploadResult.synapseStxHash}</code>
+              </p>
+            )}
+            {uploadResult.contractTxHash && (
+              <p>
+                <span className="font-medium">Registry tx:</span>
+                <code className="ml-2 bg-green-100 px-2 py-1 rounded text-xs break-all">{uploadResult.contractTxHash}</code>
               </p>
             )}
           </div>

@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { apiClient, AccountInfo } from '@/lib/api-client';
+import { useEffect, useState } from 'react';
+import { apiClient, AccountInfo, SetupResult } from '@/lib/api-client';
 
 export default function AccountInfoDisplay() {
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [backendOnline, setBackendOnline] = useState(false);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupAmount, setSetupAmount] = useState('100');
+  const [setupResult, setSetupResult] = useState<SetupResult | null>(null);
 
   useEffect(() => {
     loadAccountInfo();
@@ -30,6 +33,22 @@ export default function AccountInfoDisplay() {
       setError(err.message || 'Failed to load account info');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSetup = async () => {
+    setSetupLoading(true);
+    setError(null);
+    setSetupResult(null);
+
+    try {
+      const result = await apiClient.setupAccount(setupAmount || undefined);
+      setSetupResult(result);
+      await loadAccountInfo();
+    } catch (err: any) {
+      setError(err.message || 'Failed to setup account');
+    } finally {
+      setSetupLoading(false);
     }
   };
 
@@ -83,6 +102,43 @@ export default function AccountInfoDisplay() {
             <p className="text-sm text-gray-600">Lockup Requirement</p>
             <p className="text-xl font-bold text-purple-900">{accountInfo.lockupRequirement} USDFC</p>
           </div>
+        </div>
+      )}
+
+      {/* One-time setup (deposit + approve) */}
+      <div className="mt-6 border-t border-gray-100 pt-4">
+        <p className="text-sm text-gray-700 mb-2">Fund USDFC + approve Warm Storage</p>
+        <div className="flex items-center space-x-2">
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={setupAmount}
+            onChange={(e) => setSetupAmount(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="100"
+            disabled={setupLoading}
+          />
+          <button
+            onClick={handleSetup}
+            disabled={setupLoading}
+            className="whitespace-nowrap bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {setupLoading ? 'Funding...' : 'Setup'}
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          Deposits USDFC and sets allowances so uploads can be registered on-chain.
+        </p>
+      </div>
+
+      {setupResult && (
+        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800 space-y-1">
+          <p className="font-semibold">Account ready</p>
+          <p>Deposited: {setupResult.depositAmount} USDFC</p>
+          <p className="break-all text-xs">
+            Warm Storage: <code className="bg-green-100 px-1 rounded">{setupResult.warmStorageAddress}</code>
+          </p>
         </div>
       )}
     </div>
