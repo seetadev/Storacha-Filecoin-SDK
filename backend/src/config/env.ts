@@ -6,6 +6,11 @@ export const config = {
   port: parseInt(process.env.PORT || "3000", 10),
   nodeEnv: process.env.NODE_ENV || "development",
 
+  contracts: {
+    fileRegistryAddress: process.env.FILE_REGISTRY_ADDRESS || "",
+    paymentEscrowAddress: process.env.PAYMENT_ESCROW_ADDRESS || "",
+  },
+
   filecoin: {
     privateKey: process.env.FILECOIN_PRIVATE_KEY || "",
     rpcUrl:
@@ -23,6 +28,10 @@ export const config = {
 export function validateConfig(): void {
   if (!config.filecoin.privateKey) {
     throw new Error("FILECOIN_PRIVATE_KEY is required");
+  }
+
+  if (!config.contracts.fileRegistryAddress || !config.contracts.paymentEscrowAddress) {
+    console.warn("⚠️ Contract addresses (FILE_REGISTRY_ADDRESS, PAYMENT_ESCROW_ADDRESS) not set. Payment verification will fail.");
   }
 
   if (!config.filecoin.rpcUrl) {
