@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+temp/
+*.log
+.DS_Store
+cache/
+artifacts/
+
+deployments.json
+package-lock.json
