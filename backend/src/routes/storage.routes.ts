@@ -173,4 +173,25 @@ router.post(
   },
 );
 
+/**
+ * @route POST /api/storage/sync-price
+ * @desc Fetch network price via Synapse and update FileRegistry smart contract
+ */
+router.post(
+  "/sync-price",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      console.log("\Syncing Dynamic Storage Price");
+      const result = await storageService.syncStoragePrice();
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      console.error("Sync price endpoint error:", error);
+      next(error);
+    }
+  }
+);
 export default router;
