@@ -1,12 +1,13 @@
 import { Router, Request, Response, NextFunction } from "express";
 import multer from "multer";
 import { StorageService } from "../services/storage.service.js";
+import { getUcanService } from "../services/ucan.service.js";
+import { dynamicDownloadCapability } from "../middleware/ucan.middleware.js";
 import { config } from "../config/env.js";
 
 const router: Router = Router();
 const storageService = new StorageService();
 
-// Configure multer for in-memory storage
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -14,10 +15,6 @@ const upload = multer({
   },
 });
 
-/**
- * POST /api/storage/upload
- * Upload a file to Filecoin
- */
 router.post(
   "/upload",
   upload.single("file"),
@@ -35,7 +32,6 @@ router.post(
       console.log(`   Size: ${req.file.size} bytes`);
       console.log(`   MIME type: ${req.file.mimetype}`);
 
-      // Optional preflight check
       const preflight = await storageService.preflightCheck(req.file.size);
       if (!preflight.canUpload) {
         return res.status(402).json({
@@ -45,7 +41,6 @@ router.post(
         });
       }
 
-      // Upload file
       const uploadResult = await storageService.uploadFile(
         req.file.buffer,
         req.file.originalname,
@@ -66,22 +61,18 @@ router.post(
   },
 );
 
-/**
- * GET /api/storage/download/:pieceCid
- * Download a file from Filecoin
- */
 router.get(
   "/download/:pieceCid",
+  dynamicDownloadCapability(),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { pieceCid } = req.params;
 
       console.log(`\n Download request: ${pieceCid}`);
+      console.log(`UCAN validation: ${req.ucan?.valid ? 'VALID' : 'INVALID'}`);
 
-      // Download file
       const downloadResult = await storageService.downloadFile(pieceCid);
 
-      // Set headers for file download
       res.setHeader("Content-Type", "application/octet-stream");
       res.setHeader(
         "Content-Disposition",
@@ -97,10 +88,6 @@ router.get(
   },
 );
 
-/**
- * GET /api/storage/preflight
- * Check if upload is possible
- */
 router.get(
   "/preflight",
   async (req: Request, res: Response, next: NextFunction) => {
@@ -127,10 +114,6 @@ router.get(
   },
 );
 
-/**
- * GET /api/storage/account
- * Get account information
- */
 router.get(
   "/account",
   async (req: Request, res: Response, next: NextFunction) => {
@@ -148,10 +131,6 @@ router.get(
   },
 );
 
-/**
- * POST /api/storage/setup
- * Setup account (deposit and approve service)
- */
 router.post(
   "/setup",
   async (req: Request, res: Response, next: NextFunction) => {
@@ -168,6 +147,112 @@ router.post(
       });
     } catch (error: any) {
       console.error("Setup error:", error);
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/ucan/download-token",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { pieceCid, expiresInSeconds } = req.body;
+
+      if (!pieceCid) {
+        return res.status(400).json({
+          success: false,
+          error: "pieceCid is required",
+        });
+      }
+
+      console.log(`\n Generating download UCAN token for: ${pieceCid}`);
+
+      const ucanService = getUcanService();
+      const tokenResponse = await ucanService.generateDownloadToken({
+        pieceCid,
+        expiresInSeconds: expiresInSeconds || 3600,
+      });
+
+      res.json({
+        success: true,
+        data: tokenResponse,
+      });
+    } catch (error: any) {
+      console.error("UCAN token generation error:", error);
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/ucan/upload-token",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { expiresInSeconds } = req.body;
+
+      console.log("\n Generating upload UCAN token");
+
+      const ucanService = getUcanService();
+      const tokenResponse = await ucanService.generateUploadToken({
+        expiresInSeconds: expiresInSeconds || 1800,
+      });
+
+      res.json({
+        success: true,
+        data: tokenResponse,
+      });
+    } catch (error: any) {
+      console.error("UCAN upload token generation error:", error);
+      next(error);
+    }
+  },
+);
+
+router.get(
+  "/ucan/issuer",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ucanService = getUcanService();
+      const issuerDID = ucanService.getIssuerDID();
+
+      res.json({
+        success: true,
+        data: {
+          issuer: issuerDID,
+          service: "Storacha Filecoin Storage",
+        },
+      });
+    } catch (error: any) {
+      console.error("UCAN issuer info error:", error);
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/ucan/validate",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { token, requiredCapability } = req.body;
+
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          error: "token is required",
+        });
+      }
+
+      console.log("\n Validating UCAN token");
+
+      const ucanService = getUcanService();
+      const validation = await ucanService.validateToken(token, requiredCapability);
+
+      res.json({
+        success: true,
+        data: validation,
+      });
+    } catch (error: any) {
+      console.error("UCAN validation error:", error);
       next(error);
     }
   },

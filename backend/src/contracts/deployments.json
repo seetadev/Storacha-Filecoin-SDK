@@ -1,0 +1,38 @@
+{
+  "hardhat": {
+    "network": "hardhat",
+    "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "deployedAt": "2025-11-29T01:52:02.234Z",
+    "contracts": {
+      "FileRegistry": {
+        "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "transactionHash": "0x6ee7071c45fa295a9fbcadf9b3f9c61b4d170ff0eea7285eb6cd2ca94ba1556d"
+      },
+      "PaymentEscrow": {
+        "address": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        "transactionHash": "0xd5ff0a09492106b1da38d417a56722ef2322737ea6ed81c08b0230a9f1aec7ad"
+      }
+    },
+    "dependencies": {
+      "USDFC": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    }
+  },
+  "calibration": {
+    "network": "calibration",
+    "deployer": "0x1De0d1DA1531C741bB2bc8dFe6dfCbFaB530A20A",
+    "deployedAt": "2025-12-01T16:57:02.447Z",
+    "contracts": {
+      "FileRegistry": {
+        "address": "0x36AFEF1BECfD122a6786b768A6C995093312aa71",
+        "transactionHash": "0x2b62f73cb2c03bc80383ef873a992f39b57e4be990cf83dd7edd1a125801082e"
+      },
+      "PaymentEscrow": {
+        "address": "0xBB5461f038459Aa2EBD656481Db42f84456d1eff",
+        "transactionHash": "0xeeb0f5e8250f15168e54eed47bf7b145c26388e91386a7873cdbe3d4eba322e5"
+      }
+    },
+    "dependencies": {
+      "USDFC": "0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"
+    }
+  }
+}

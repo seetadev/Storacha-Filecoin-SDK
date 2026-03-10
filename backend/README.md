@@ -75,6 +75,60 @@ GET /health
 
 Returns server status.
 
+### UCAN Authentication
+
+#### Get UCAN Issuer
+
+```bash
+GET /api/storage/ucan/issuer
+```
+
+Returns the service's UCAN issuer DID.
+
+#### Generate Download Token
+
+```bash
+POST /api/storage/ucan/download-token
+Content-Type: application/json
+
+{
+  "pieceCid": "baga6ea4seaq...",
+  "expiresInSeconds": 3600
+}
+```
+
+Generates a UCAN token for downloading a specific file. Required for download endpoints.
+
+#### Generate Upload Token
+
+```bash
+POST /api/storage/ucan/upload-token
+Content-Type: application/json
+
+{
+  "expiresInSeconds": 1800
+}
+```
+
+Generates a UCAN token for upload operations.
+
+#### Validate Token
+
+```bash
+POST /api/storage/ucan/validate
+Content-Type: application/json
+
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "requiredCapability": {
+    "resource": "storacha:file:baga6ea4seaq...",
+    "action": "download"
+  }
+}
+```
+
+Validates a UCAN token (for testing purposes).
+
 ### Get Account Info
 
 ```bash
@@ -87,8 +141,9 @@ Returns:
   "success": true,
   "data": {
     "totalFunds": "100.0",
-    "lockupRequirement": "1000.0",
-    "availableFunds": "100.0"
+    "lockupCurrent": "50.0",
+    "lockupRate": "0.0",
+    "availableFunds": "50.0"
   }
 }
 ```
@@ -108,10 +163,19 @@ Returns:
   "data": {
     "canUpload": true,
     "estimatedCost": "0.5",
+    "estimatedCostBreakdown": {
+      "perEpoch": "0.5",
+      "perDay": "0.5",
+      "perMonth": "0.5"
+    },
     "allowance": {
-      "current": "100.0",
-      "required": "0.5",
-      "sufficient": true
+      "sufficient": true,
+      "message": null
+    },
+    "dataSetId": 123,
+    "selectedProvider": {
+      "address": "0x...",
+      "name": "Example Provider"
     }
   }
 }
@@ -148,16 +212,25 @@ curl -X POST http://localhost:3000/api/storage/upload \
 }
 ```
 
-### Download File
+### Download File (Requires UCAN Token)
 
 ```bash
 GET /api/storage/download/:pieceCid
+Authorization: Bearer <ucan-token>
 ```
 
 **Example:**
 
 ```bash
+# First, generate a download token
+TOKEN=$(curl -s -X POST http://localhost:3000/api/storage/ucan/download-token \
+  -H "Content-Type: application/json" \
+  -d '{"pieceCid": "baga6ea4seaqao7s73y24kcutaosvacpdjgfe5pw76ooefnyqw4ynr3d2y6x2mpq"}' \
+  | jq -r '.data.token')
+
+# Then use the token to download
 curl http://localhost:3000/api/storage/download/baga6ea4seaqao7s73y24kcutaosvacpdjgfe5pw76ooefnyqw4ynr3d2y6x2mpq \
+  -H "Authorization: Bearer $TOKEN" \
   --output downloaded-file.txt
 ```
 
@@ -169,13 +242,17 @@ curl http://localhost:3000/api/storage/download/baga6ea4seaqao7s73y24kcutaosvacp
 backend/
 ├── src/
 │   ├── config/
-│   │   ├── env.ts          # Environment configuration
-│   │   └── synapse.ts      # Synapse SDK initialization
+│   │   ├── env.ts              # Environment configuration
+│   │   └── synapse.ts          # Synapse SDK initialization
 │   ├── services/
-│   │   └── storage.service.ts  # Storage operations
+│   │   ├── storage.service.ts  # Storage operations
+│   │   ├── contract.service.ts # Smart contract interactions
+│   │   └── ucan.service.ts     # UCAN token management
+│   ├── middleware/
+│   │   └── ucan.middleware.ts  # UCAN authentication middleware
 │   ├── routes/
 │   │   └── storage.routes.ts   # API routes
-│   └── index.ts            # Express server
+│   └── index.ts                # Express server
 ├── .env.example
 ├── package.json
 └── tsconfig.json

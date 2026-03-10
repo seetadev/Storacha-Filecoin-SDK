@@ -5,7 +5,6 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Import contract ABIs
 const FileRegistryABI = JSON.parse(
   readFileSync(join(__dirname, "../contracts/FileRegistry.json"), "utf8")
 ).abi;
@@ -14,10 +13,16 @@ const PaymentEscrowABI = JSON.parse(
   readFileSync(join(__dirname, "../contracts/PaymentEscrow.json"), "utf8")
 ).abi;
 
-// Import deployment addresses
 const deployments = JSON.parse(
   readFileSync(join(__dirname, "../contracts/deployments.json"), "utf8")
 );
+
+export enum FileStatus {
+  Uploaded = 0,
+  Paid = 1,
+  Stored = 2,
+  Retrieved = 3,
+}
 
 export interface FileRecord {
   pieceCid: string;
@@ -27,7 +32,7 @@ export interface FileRecord {
   uploadTime: number;
   paidTime: number;
   storedTime: number;
-  status: number; // 0=Uploaded, 1=Paid, 2=Stored, 3=Retrieved
+  status: FileStatus;
   metadataHash: string;
   exists: boolean;
 }
@@ -51,21 +56,17 @@ export class ContractService {
   private network: string;
 
   constructor() {
-    // Initialize provider
     const rpcUrl = process.env.FILECOIN_RPC_URL || "http://localhost:8545";
     this.provider = new ethers.JsonRpcProvider(rpcUrl);
 
-    // Initialize signer (admin wallet)
     const privateKey = process.env.FILECOIN_PRIVATE_KEY;
     if (!privateKey) {
       throw new Error("FILECOIN_PRIVATE_KEY not set in environment");
     }
     this.signer = new ethers.Wallet(privateKey, this.provider);
 
-    // Determine network
     this.network = process.env.FILECOIN_NETWORK || "hardhat";
 
-    // Get contract addresses
     const networkDeployment = deployments[this.network];
     if (!networkDeployment) {
       throw new Error(`No deployment found for network: ${this.network}`);
@@ -75,7 +76,6 @@ export class ContractService {
     console.log(`FileRegistry: ${networkDeployment.contracts.FileRegistry.address}`);
     console.log(`PaymentEscrow: ${networkDeployment.contracts.PaymentEscrow.address}`);
 
-    // Initialize contracts
     this.fileRegistry = new ethers.Contract(
       networkDeployment.contracts.FileRegistry.address,
       FileRegistryABI,
@@ -88,7 +88,6 @@ export class ContractService {
       this.signer
     );
 
-    // Standard ERC20 ABI for USDFC token
     const ERC20_ABI = [
       "function transfer(address to, uint256 amount) returns (bool)",
       "function approve(address spender, uint256 amount) returns (bool)",
@@ -108,9 +107,6 @@ export class ContractService {
     );
   }
 
-  /**
-   * Register a file upload on-chain
-   */
   async registerFile(
     pieceCid: string,
     fileSize: number,
@@ -124,7 +120,6 @@ export class ContractService {
       const tx = await this.fileRegistry.registerFile(pieceCid, fileSize, metadata);
       const receipt = await tx.wait();
 
-      // Find the FileUploaded event
       const event = receipt.logs.find((log: any) => {
         try {
           const parsed = this.fileRegistry.interface.parseLog(log);
@@ -139,6 +134,9 @@ export class ContractService {
       }
 
       const parsedEvent = this.fileRegistry.interface.parseLog(event);
+      if (!parsedEvent) {
+        throw new Error("Failed to parse FileUploaded event");
+      }
       const fileId = Number(parsedEvent.args[0]);
       const storagePrice = parsedEvent.args[4];
 
@@ -155,9 +153,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Get file information by ID
-   */
   async getFile(fileId: number): Promise<FileRecord> {
     try {
       const file = await this.fileRegistry.getFile(fileId);
@@ -169,7 +164,7 @@ export class ContractService {
         uploadTime: Number(file.uploadTime),
         paidTime: Number(file.paidTime),
         storedTime: Number(file.storedTime),
-        status: Number(file.status),
+        status: Number(file.status) as FileStatus,
         metadataHash: file.metadataHash,
         exists: file.exists,
       };
@@ -179,9 +174,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Get file ID by Piece CID
-   */
   async getFileIdByCid(pieceCid: string): Promise<number> {
     try {
       const fileId = await this.fileRegistry.getFileIdByCid(pieceCid);
@@ -192,9 +184,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Confirm storage completion (called after Synapse confirms storage)
-   */
   async confirmStorage(fileId: number): Promise<string> {
     try {
       console.log(`Confirming storage for file ${fileId}...`);
@@ -210,9 +199,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Get storage price for a file size
-   */
   async getStoragePrice(fileSize: number): Promise<bigint> {
     try {
       return await this.fileRegistry.calculateStoragePrice(fileSize);
@@ -222,9 +208,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Get files uploaded by a user
-   */
   async getUserFiles(userAddress: string): Promise<number[]> {
     try {
       const fileIds = await this.fileRegistry.getUserFiles(userAddress);
@@ -235,9 +218,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Check and approve USDFC tokens for payment escrow
-   */
   async ensureUsdfcAllowance(amount: bigint): Promise<string | null> {
     try {
       const escrowAddress = this.paymentEscrow.getAddress();
@@ -249,7 +229,6 @@ export class ContractService {
       if (currentAllowance < amount) {
         console.log("Insufficient allowance, approving USDFC tokens...");
 
-        // Approve a reasonable amount (e.g., 10x the required amount for future transactions)
         const approvalAmount = amount * 10n;
         const tx = await this.usdfcToken.approve(escrowAddress, approvalAmount);
         await tx.wait();
@@ -266,9 +245,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Check USDFC balance
-   */
   async getUsdfcBalance(): Promise<bigint> {
     try {
       return await this.usdfcToken.balanceOf(this.signer.address);
@@ -278,14 +254,10 @@ export class ContractService {
     }
   }
 
-  /**
-   * Deposit payment for file storage
-   */
   async depositPayment(fileId: number, amount: bigint): Promise<string> {
     try {
       console.log(`Depositing payment for file ${fileId}: ${amount} USDFC`);
 
-      // Check balance first
       const balance = await this.getUsdfcBalance();
       console.log(`Current USDFC balance: ${ethers.formatUnits(balance, 18)} USDFC`);
 
@@ -293,7 +265,6 @@ export class ContractService {
         throw new Error(`Insufficient USDFC balance: ${ethers.formatUnits(balance, 18)} USDFC available, ${ethers.formatUnits(amount, 18)} USDFC required`);
       }
 
-      // Verify file exists and check storage price from contract
       const file = await this.getFile(fileId);
       console.log(`File storage price from contract: ${file.storagePrice} USDFC`);
       console.log(`Payment amount we're trying to send: ${amount} USDFC`);
@@ -304,29 +275,24 @@ export class ContractService {
         throw new Error(`Payment amount mismatch: contract expects ${file.storagePrice} USDFC, but trying to pay ${amount} USDFC`);
       }
 
-      // Check if file is already paid (status should be 0=Uploaded for payment to work)
-      if (file.status !== 0) {
+      if (file.status !== FileStatus.Uploaded) {
         throw new Error(`File ${fileId} is not in Uploaded status (current status: ${file.status}), cannot accept payment`);
       }
 
-      // Double-check payment status via PaymentEscrow
       const paymentStatus = await this.getFilePaymentStatus(fileId);
       console.log(`Payment status from escrow: hasPayment=${paymentStatus.hasPayment}, amount=${paymentStatus.amount}`);
       if (paymentStatus.hasPayment) {
         throw new Error(`File ${fileId} already has payment in escrow`);
       }
 
-      // Check if PaymentEscrow contract is paused
       const isPaused = await this.paymentEscrow.paused();
       console.log(`PaymentEscrow contract paused: ${isPaused}`);
       if (isPaused) {
         throw new Error("PaymentEscrow contract is currently paused");
       }
 
-      // Ensure allowance
       await this.ensureUsdfcAllowance(amount);
 
-      // Deposit payment
       console.log("Calling PaymentEscrow.depositForFile...");
       const tx = await this.paymentEscrow.depositForFile(fileId, amount);
       console.log("Transaction submitted, waiting for confirmation...");
@@ -340,9 +306,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Check file payment status
-   */
   async getFilePaymentStatus(fileId: number): Promise<{
     hasPayment: boolean;
     amount: bigint;
@@ -357,9 +320,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Release payment to provider (after storage confirmation)
-   */
   async releasePayment(fileId: number): Promise<string> {
     try {
       console.log(`Releasing payment for file ${fileId}...`);
@@ -375,9 +335,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Get current storage pricing
-   */
   async getCurrentStoragePrice(): Promise<{ pricePerByte: bigint; totalFiles: number }> {
     try {
       const [totalFiles, , pricePerByte] = await this.fileRegistry.getStats();
@@ -391,9 +348,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Update storage pricing (admin only)
-   */
   async updateStoragePrice(newPricePerByte: bigint): Promise<string> {
     try {
       console.log(`Updating storage price to ${newPricePerByte} USDFC per byte...`);
@@ -409,9 +363,6 @@ export class ContractService {
     }
   }
 
-  /**
-   * Get contract addresses for this network
-   */
   getContractAddresses() {
     const networkDeployment = deployments[this.network];
     return {
@@ -423,7 +374,6 @@ export class ContractService {
   }
 }
 
-// Singleton instance
 let contractService: ContractService;
 
 export function getContractService(): ContractService {

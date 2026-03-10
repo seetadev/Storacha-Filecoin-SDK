@@ -12,8 +12,11 @@ importers:
         specifier: ^0.1.4
         version: 0.1.4(iso-filecoin@7.4.7(typescript@5.9.3))(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3)(zod@4.2.1))(zod@4.2.1)
       '@filoz/synapse-sdk':
-        specifier: ^0.35.3
-        version: 0.35.3(iso-filecoin@7.4.7(typescript@5.9.3))(typescript@5.9.3)(zod@4.2.1)
+        specifier: ^0.36.1
+        version: 0.36.1(iso-filecoin@7.4.7(typescript@5.9.3))(typescript@5.9.3)(zod@4.2.1)
+      '@ucans/ucans':
+        specifier: ^0.12.0
+        version: 0.12.0
       cors:
         specifier: ^2.8.5
         version: 2.8.5
@@ -224,8 +227,8 @@ packages:
     peerDependencies:
       viem: 2.x
 
-  '@filoz/synapse-sdk@0.35.3':
-    resolution: {integrity: sha512-MIZne5SYS7D4JRDn+QBcXylGGfHbBUY2EEaXogX96BUBiIY7Ke+gMxAscMj4XJM/vNhU2TSJfdZXJXfE2CkPMw==}
+  '@filoz/synapse-sdk@0.36.1':
+    resolution: {integrity: sha512-wdKHrRYE5EQeWJCPZ4C12A0/2bdFqDjwZnhdk806yJFlCc5II+zuNRmjW5ndlobcbGF+bK60m0QN/pv6jzUtUw==}
 
   '@hugomrdias/filsnap-adapter@3.3.9':
     resolution: {integrity: sha512-iEXXrstHZ8M5y2Zd3Mh84YFuUKYhUTRa+ZHhd69nc/tp7zmo+kwQCYQNEgkrh9HCmVV0A4EL6wZdVukROKf+vg==}
@@ -514,6 +517,27 @@ packages:
       '@opentelemetry/sdk-trace-base': ^1.30.1 || ^2.1.0 || ^2.2.0
       '@opentelemetry/semantic-conventions': ^1.37.0
 
+  '@stablelib/binary@1.0.1':
+    resolution: {integrity: sha512-ClJWvmL6UBM/wjkvv/7m5VP3GMr9t0osr4yVgLZsLCOz4hGN9gIAFEqnJ0TsSMAN+n840nf2cHZnA5/KFqHC7Q==}
+
+  '@stablelib/ed25519@1.0.3':
+    resolution: {integrity: sha512-puIMWaX9QlRsbhxfDc5i+mNPMY+0TmQEskunY1rZEBPi1acBCVQAhnsk/1Hk50DGPtVsZtAWQg4NHGlVaO9Hqg==}
+
+  '@stablelib/hash@1.0.1':
+    resolution: {integrity: sha512-eTPJc/stDkdtOcrNMZ6mcMK1e6yBbqRBaNW55XA1jU8w/7QdnCF0CmMmOD1m7VSkBR44PWrMHU2l6r8YEQHMgg==}
+
+  '@stablelib/int@1.0.1':
+    resolution: {integrity: sha512-byr69X/sDtDiIjIV6m4roLVWnNNlRGzsvxw+agj8CIEazqWGOQp2dTYgQhtyVXV9wpO6WyXRQUzLV/JRNumT2w==}
+
+  '@stablelib/random@1.0.2':
+    resolution: {integrity: sha512-rIsE83Xpb7clHPVRlBj8qNe5L8ISQOzjghYQm/dZ7VaM2KHYwMW5adjQjrzTZCchFnNCNhkwtnOBa9HTMJCI8w==}
+
+  '@stablelib/sha512@1.0.1':
+    resolution: {integrity: sha512-13gl/iawHV9zvDKciLo1fQ8Bgn2Pvf7OV6amaRVKiq3pjQ3UmEpXxWiAfV8tYjUpeZroBxtyrwtdooQT/i3hzw==}
+
+  '@stablelib/wipe@1.0.1':
+    resolution: {integrity: sha512-WfqfX/eXGiAd3RJe4VU2snh/ZPwtSjLG4ynQ/vYzvghTh7dHFcI1wl+nrkWG6lGhukOxOsUHfv8dUXr58D0ayg==}
+
   '@types/body-parser@1.19.6':
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
 
@@ -570,6 +594,18 @@ packages:
 
   '@types/tedious@4.0.14':
     resolution: {integrity: sha512-KHPsfX/FoVbUGbyYvk1q9MMQHLPeRZhRJZdO45Q4YjvFkv4hMNghCWTvy7rdKessBsmtz4euWCWAB6/tVpI1Iw==}
+
+  '@ucans/core@0.12.0':
+    resolution: {integrity: sha512-PWk9LDyuUdyGeucqenmG2BRo4bPUJDgxuYZidKD/OKTggyfFlcE/9UK1qpg1gJiS4HpGbm40gsvCmKgLUt0Smg==}
+    engines: {node: '>=15'}
+
+  '@ucans/default-plugins@0.12.0':
+    resolution: {integrity: sha512-RJm0M2fFK1VBQh49YlJ9xfWFBzGPoKWAN787KfdDdhGCtavZqGDTgDXx7L7RnWdukLfIT4BZ5cVN/hiOkY5jyg==}
+    engines: {node: '>=15'}
+
+  '@ucans/ucans@0.12.0':
+    resolution: {integrity: sha512-XWFCfpi595sv8Bx6KbZpdR+GPSIlrit3J8CNtbmn+wuvk5IqAORMdsLC+w51f4JPM7XgLZ4W0JxaggeHDRylaw==}
+    engines: {node: '>=15'}
 
   '@web3-storage/data-segment@5.3.0':
     resolution: {integrity: sha512-zFJ4m+pEKqtKatJNsFrk/2lHeFSbkXZ6KKXjBe7/2ayA9wAar7T/unewnOcZrrZTnCWmaxKsXWqdMFy9bXK9dw==}
@@ -638,6 +674,10 @@ packages:
 
   base-x@5.0.1:
     resolution: {integrity: sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg==}
+
+  big-integer@1.6.52:
+    resolution: {integrity: sha512-QxD8cf2eVqJOOz63z6JIN9BzvVs/dlySa5HGSBH5xtR8dPteIRQnBxxKqkNTiT6jbDTF6jAfrd4oMcND9RGbQg==}
+    engines: {node: '>=0.6'}
 
   bigint-mod-arith@3.3.1:
     resolution: {integrity: sha512-pX/cYW3dCa87Jrzv6DAr8ivbbJRzEX5yGhdt8IutnX/PCIXfpx+mabWNK/M8qqh+zQ0J3thftUBHW0ByuUlG0w==}
@@ -977,6 +1017,9 @@ packages:
   multiformats@13.4.1:
     resolution: {integrity: sha512-VqO6OSvLrFVAYYjgsr8tyv62/rCQhPgsZUXLTqoFLSgdkgiUYKYeArbt1uWLlEpkjxQe+P0+sHlbPEte1Bi06Q==}
 
+  multiformats@9.9.0:
+    resolution: {integrity: sha512-HoMUjhH9T8DDBNT+6xzkrd9ga/XiBI4xLr58LJACwK6G3HTOPeMz4nB4KJs33L2BelrIJa7P0VuNaVF3hMYfjg==}
+
   negotiator@0.6.3:
     resolution: {integrity: sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==}
     engines: {node: '>= 0.6'}
@@ -992,6 +1035,9 @@ packages:
   on-finished@2.4.1:
     resolution: {integrity: sha512-oVlzkg3ENAhCk2zdv7IJwd/QUD4z2RxRwpkcGY8psCVcCYZNq4wYnVWALHM+brtuJjePWiYF/ClmuDr8Ch5+kg==}
     engines: {node: '>= 0.8'}
+
+  one-webcrypto@1.0.3:
+    resolution: {integrity: sha512-fu9ywBVBPx0gS9K0etIROTiCkvI5S1TDjFsYFb3rC1ewFxeOqsbzq7aIMBHsYfrTHBcGXJaONXXjTl8B01cW1Q==}
 
   ox@0.9.17:
     resolution: {integrity: sha512-rKAnhzhRU3Xh3hiko+i1ZxywZ55eWQzeS/Q4HRKLx2PqfHOolisZHErSsJVipGlmQKHW5qwOED/GighEw9dbLg==}
@@ -1181,6 +1227,9 @@ packages:
     resolution: {integrity: sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A==}
     engines: {node: '>=18'}
 
+  uint8arrays@3.0.0:
+    resolution: {integrity: sha512-HRCx0q6O9Bfbp+HHSfQQKD7wU70+lydKVt4EghkdOvlK/NlrF90z+eXV34mUd48rNvVJXwkrMSPpCATkct8fJA==}
+
   undici-types@6.19.8:
     resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
 
@@ -1359,7 +1408,7 @@ snapshots:
       - typescript
       - zod
 
-  '@filoz/synapse-sdk@0.35.3(iso-filecoin@7.4.7(typescript@5.9.3))(typescript@5.9.3)(zod@4.2.1)':
+  '@filoz/synapse-sdk@0.36.1(iso-filecoin@7.4.7(typescript@5.9.3))(typescript@5.9.3)(zod@4.2.1)':
     dependencies:
       '@filoz/synapse-core': 0.1.4(iso-filecoin@7.4.7(typescript@5.9.3))(typescript@5.9.3)(viem@2.42.1(typescript@5.9.3)(zod@4.2.1))(zod@4.2.1)
       '@web3-storage/data-segment': 5.3.0
@@ -1797,6 +1846,33 @@ snapshots:
       '@sentry/core': 10.30.0
     optional: true
 
+  '@stablelib/binary@1.0.1':
+    dependencies:
+      '@stablelib/int': 1.0.1
+
+  '@stablelib/ed25519@1.0.3':
+    dependencies:
+      '@stablelib/random': 1.0.2
+      '@stablelib/sha512': 1.0.1
+      '@stablelib/wipe': 1.0.1
+
+  '@stablelib/hash@1.0.1': {}
+
+  '@stablelib/int@1.0.1': {}
+
+  '@stablelib/random@1.0.2':
+    dependencies:
+      '@stablelib/binary': 1.0.1
+      '@stablelib/wipe': 1.0.1
+
+  '@stablelib/sha512@1.0.1':
+    dependencies:
+      '@stablelib/binary': 1.0.1
+      '@stablelib/hash': 1.0.1
+      '@stablelib/wipe': 1.0.1
+
+  '@stablelib/wipe@1.0.1': {}
+
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
@@ -1881,6 +1957,23 @@ snapshots:
       '@types/node': 20.19.19
     optional: true
 
+  '@ucans/core@0.12.0':
+    dependencies:
+      uint8arrays: 3.0.0
+
+  '@ucans/default-plugins@0.12.0':
+    dependencies:
+      '@stablelib/ed25519': 1.0.3
+      '@ucans/core': 0.12.0
+      big-integer: 1.6.52
+      one-webcrypto: 1.0.3
+      uint8arrays: 3.0.0
+
+  '@ucans/ucans@0.12.0':
+    dependencies:
+      '@ucans/core': 0.12.0
+      '@ucans/default-plugins': 0.12.0
+
   '@web3-storage/data-segment@5.3.0':
     dependencies:
       '@ipld/dag-cbor': 9.2.5
@@ -1936,6 +2029,8 @@ snapshots:
     optional: true
 
   base-x@5.0.1: {}
+
+  big-integer@1.6.52: {}
 
   bigint-mod-arith@3.3.1: {}
 
@@ -2342,6 +2437,8 @@ snapshots:
 
   multiformats@13.4.1: {}
 
+  multiformats@9.9.0: {}
+
   negotiator@0.6.3: {}
 
   object-assign@4.1.1: {}
@@ -2351,6 +2448,8 @@ snapshots:
   on-finished@2.4.1:
     dependencies:
       ee-first: 1.1.1
+
+  one-webcrypto@1.0.3: {}
 
   ox@0.9.17(typescript@5.9.3)(zod@4.2.1):
     dependencies:
@@ -2375,7 +2474,7 @@ snapshots:
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
-      abitype: 1.1.0(typescript@5.9.3)(zod@4.2.1)
+      abitype: 1.2.3(typescript@5.9.3)(zod@4.2.1)
       eventemitter3: 5.0.1
     optionalDependencies:
       typescript: 5.9.3
@@ -2573,6 +2672,10 @@ snapshots:
   typescript@5.9.3: {}
 
   uint8array-extras@1.5.0: {}
+
+  uint8arrays@3.0.0:
+    dependencies:
+      multiformats: 9.9.0
 
   undici-types@6.19.8: {}
 

@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@filoz/synapse-core": "^0.1.4",
-    "@filoz/synapse-sdk": "^0.35.3",
+    "@filoz/synapse-sdk": "^0.36.1",
+    "@ucans/ucans": "^0.12.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "ethers": "^6.11.1",
