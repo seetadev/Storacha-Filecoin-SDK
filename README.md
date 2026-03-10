@@ -125,6 +125,28 @@ cd backend
 pnpm test
 ```
 
+### **Backend Live Calibration Test**
+
+Runs a live end-to-end check against Calibration (`upload -> pay -> stored/released -> retrieve`).
+
+```bash
+# Terminal 1: run backend
+cd backend
+pnpm dev
+
+# Terminal 2: run live calibration test
+cd backend
+BACKEND_URL=http://localhost:3000 \
+FILECOIN_RPC_URL=https://api.calibration.node.glif.io/rpc/v1 \
+FILECOIN_NETWORK=calibration \
+pnpm test:calibration
+```
+
+Optional environment variables:
+
+* `SMOKE_TIMEOUT_SECONDS` (default `300`)
+* `SMOKE_POLL_INTERVAL_MS` (default `10000`)
+
 ### **SDK Tests**
 
 ```bash
@@ -178,5 +200,4 @@ pnpm start
 * **Contract Addresses:** written to `contracts/deployments.json` after deployment.
 * **Calibration Testnet:** ensure your wallet has FIL for gas + USDFC for payments.
 * **UCAN Delegation:** backend issues scoped UCANs for retrieval access.
-
 

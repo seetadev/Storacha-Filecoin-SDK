@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { config, validateConfig } from "./config/env.js";
 import { initializeSynapse, cleanupSynapse } from "./config/synapse.js";
-import storageRoutes from "./routes/storage.routes.js";
+import createStorageRouter from "./routes/storage.routes.js";
 
 const app = express();
 
@@ -18,7 +18,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Routes
-app.use("/api/storage", storageRoutes);
+app.use("/api/storage", createStorageRouter());
 
 // Health check
 app.get("/health", (req: Request, res: Response) => {
@@ -37,6 +37,8 @@ app.get("/", (req: Request, res: Response) => {
       health: "GET /health",
       storage: {
         upload: "POST /api/storage/upload",
+        pay: "POST /api/storage/pay",
+        status: "GET /api/storage/status/:fileIdOrCid",
         download: "GET /api/storage/download/:pieceCid",
         preflight: "GET /api/storage/preflight?size={bytes}",
         account: "GET /api/storage/account",
@@ -100,13 +102,20 @@ async function start() {
       );
       console.log("  POST   /api/storage/upload                 - Upload file");
       console.log(
+        "  POST   /api/storage/pay                    - Pay for file",
+      );
+      console.log(
+        "  GET    /api/storage/status/:fileIdOrCid    - Get file/payment status",
+      );
+      console.log(
         "  GET    /api/storage/download/:pieceCid     - Download file",
       );
       console.log("\n Quick start:");
       console.log("  1. POST /api/storage/setup (setup account with USDFC)");
-      console.log("  2. POST /api/storage/upload (upload your first file)");
+      console.log("  2. POST /api/storage/upload (create and store file)");
+      console.log("  3. POST /api/storage/pay (deposit escrow payment)");
       console.log(
-        "  3. GET  /api/storage/download/:cid (retrieve your file)\n",
+        "  4. GET  /api/storage/download/:cid (retrieve stored file)\n",
       );
     });
 

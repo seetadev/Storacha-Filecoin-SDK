@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "pnpm build && mkdir -p dist/contracts && cp src/contracts/*.json dist/contracts/ && node --test dist/test/**/*.test.js",
+    "test:calibration": "pnpm build && mkdir -p dist/contracts && cp src/contracts/*.json dist/contracts/ && node dist/scripts/calibration-smoke.js"
   },
   "dependencies": {
     "@filoz/synapse-core": "^0.1.4",

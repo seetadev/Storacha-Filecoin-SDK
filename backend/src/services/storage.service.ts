@@ -1,7 +1,6 @@
 import { getSynapse } from "../config/synapse.js";
 import { getContractService } from "./contract.service.js";
 import { ethers } from "ethers";
-import { calculate as calculatePieceCID } from "@filoz/synapse-core/piece";
 
 export interface UploadResult {
   fileId: number;
@@ -10,7 +9,13 @@ export interface UploadResult {
   filename: string;
   uploadedAt: Date;
   storagePrice: string;
-  synapseStxHash?: string;
+  selectedProvider?: {
+    id: number;
+    address: string;
+    name: string;
+  };
+  dataSetId?: number;
+  uploadTxHash?: string;
   contractTxHash?: string;
 }
 
@@ -19,76 +24,202 @@ export interface DownloadResult {
   size: number;
 }
 
+export interface PaymentResult {
+  fileId: number;
+  pieceCid: string;
+  amount: string;
+  paymentTxHash: string;
+  status: "paid";
+  confirmationQueued: boolean;
+}
+
+interface PendingConfirmation {
+  fileId: number;
+  pieceCid: string;
+  attempts: number;
+}
+
+interface SynapseLike {
+  storage: {
+    preflightUpload: (size: number) => Promise<any>;
+    upload: (data: Uint8Array, options?: any) => Promise<any>;
+    download: (pieceCid: string, options?: any) => Promise<Uint8Array>;
+  };
+  payments: {
+    accountInfo: () => Promise<any>;
+    balance: () => Promise<bigint>;
+    deposit: (amount: bigint) => Promise<{ wait: () => Promise<any> }>;
+    approveService: (
+      serviceAddress: string,
+      rateAllowance: bigint,
+      lockupAllowance: bigint,
+      ttl: bigint,
+    ) => Promise<{ wait: () => Promise<any> }>;
+  };
+  getWarmStorageAddress: () => string;
+}
+
+interface ContractServiceLike {
+  getStoragePrice: (fileSize: number) => Promise<bigint>;
+  registerFile: (
+    pieceCid: string,
+    fileSize: number,
+    metadataHash?: string,
+  ) => Promise<{ fileId: number; storagePrice: bigint; txHash: string }>;
+  getFile: (fileId: number) => Promise<any>;
+  getFileIdByCid: (pieceCid: string) => Promise<number>;
+  depositPayment: (fileId: number, amount: bigint) => Promise<string>;
+  getFilePaymentStatus: (fileId: number) => Promise<{
+    hasPayment: boolean;
+    amount: bigint;
+    isReleased: boolean;
+  }>;
+  confirmStorage: (fileId: number) => Promise<string>;
+  releasePayment: (fileId: number) => Promise<string>;
+}
+
+interface StorageServiceOptions {
+  contractService?: ContractServiceLike;
+  synapseProvider?: () => SynapseLike;
+  confirmationIntervalMs?: number;
+  maxConfirmationAttempts?: number;
+  startConfirmationProcessor?: boolean;
+}
+
 export class StorageService {
-  private contractService = getContractService();
+  private contractService: ContractServiceLike;
+  private synapseProvider: () => SynapseLike;
+  private pendingConfirmations = new Map<number, PendingConfirmation>();
+  private activeConfirmations = new Set<number>();
+  private maxConfirmationAttempts: number;
+
+  constructor(options: StorageServiceOptions = {}) {
+    this.contractService = options.contractService ?? getContractService();
+    this.synapseProvider =
+      options.synapseProvider ?? (getSynapse as unknown as () => SynapseLike);
+    this.maxConfirmationAttempts = options.maxConfirmationAttempts ?? 20;
+
+    if (options.startConfirmationProcessor !== false) {
+      const intervalMs = options.confirmationIntervalMs ?? 15000;
+      setInterval(() => {
+        this.processPendingConfirmations().catch((error) => {
+          console.error("Pending confirmation processing failed:", error);
+        });
+      }, intervalMs);
+    }
+  }
 
   async uploadFile(
     fileBuffer: Buffer,
     filename: string,
     metadata?: Record<string, any>,
   ): Promise<UploadResult> {
-    const synapse = getSynapse();
+    const synapse = this.synapseProvider();
 
     try {
       console.log(`Uploading ${filename} (${fileBuffer.length} bytes)...`);
 
-      let synapseStxHash: string | undefined;
-      let uploadedPieceCid: string = "";
-
       const uint8ArrayBytes = new Uint8Array(fileBuffer);
-      console.log(`Uploading ${filename} (${uint8ArrayBytes.length} bytes) via Synapse SDK...`);
+      console.log(
+        `Uploading ${filename} (${uint8ArrayBytes.length} bytes) via Synapse SDK...`,
+      );
 
-      if (uint8ArrayBytes.length < 65) {
-        throw new Error(`File too small for CAR generation. Minimum size is 65 bytes, got ${uint8ArrayBytes.length} bytes`);
+      const preflight = await synapse.storage.preflightUpload(
+        uint8ArrayBytes.length,
+      );
+      if (!preflight.allowanceCheck.sufficient) {
+        throw new Error(
+          preflight.allowanceCheck.message ||
+            "Insufficient allowance for upload",
+        );
       }
 
-      console.log('Buffer type:', uint8ArrayBytes.constructor.name);
+      const selectedProvider = preflight.selectedProvider;
+      const selectedDataSetId = preflight.selectedDataSetId;
+      if (!selectedProvider || selectedDataSetId == null) {
+        console.warn(
+          "Preflight did not return selected provider/data set. Falling back to Synapse auto-selection.",
+          {
+            selectedProvider: selectedProvider
+              ? {
+                  id: selectedProvider.id,
+                  name: selectedProvider.name,
+                  serviceProvider: selectedProvider.serviceProvider,
+                }
+              : null,
+            selectedDataSetId,
+          },
+        );
+      }
 
-      console.log("Calculating piece CID using Synapse Core...");
+      let uploadTxHash: string | undefined;
+      const uploadMetadata = Object.fromEntries(
+        Object.entries({
+          filename,
+          ...(metadata ?? {}),
+        }).map(([key, value]) => [key, String(value)]),
+      );
 
-      const pieceCID = calculatePieceCID(uint8ArrayBytes);
-      const pieceCidString = pieceCID.toString();
-      uploadedPieceCid = pieceCidString;
+      const uploadOptions: Record<string, any> = {
+        metadata: {
+          ...uploadMetadata,
+        },
+        callbacks: {
+          onPieceAdded: (transaction: string | undefined) => {
+            if (transaction) {
+              uploadTxHash = transaction;
+            }
+          },
+        },
+      };
 
-      console.log(`Calculated piece CID: ${pieceCidString}`);
+      if (selectedProvider?.serviceProvider) {
+        uploadOptions.providerAddress = selectedProvider.serviceProvider;
+      }
+      if (selectedDataSetId != null) {
+        uploadOptions.dataSetId = selectedDataSetId;
+      }
 
-      const finalPieceCid = pieceCidString;
+      const uploadResult = await synapse.storage.upload(
+        uint8ArrayBytes,
+        uploadOptions,
+      );
 
-      const storagePrice = await this.contractService.getStoragePrice(uint8ArrayBytes.length);
+      const pieceCid = uploadResult.pieceCid.toString();
+      console.log(`Synapse upload completed with piece CID: ${pieceCid}`);
+
+      const storagePrice = await this.contractService.getStoragePrice(
+        uint8ArrayBytes.length,
+      );
       console.log(`Storage price: ${storagePrice} USDFC`);
 
       const metadataHash = metadata
         ? ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(metadata)))
         : ethers.ZeroHash;
 
-      const { fileId, txHash: contractTxHash } = await this.contractService.registerFile(
-        finalPieceCid,
-        uint8ArrayBytes.length,
-        metadataHash
-      );
+      const { fileId, txHash: contractTxHash } =
+        await this.contractService.registerFile(
+          pieceCid,
+          uint8ArrayBytes.length,
+          metadataHash,
+        );
 
       console.log(`File registered in contract - ID: ${fileId}`);
 
-      console.log(`Depositing payment for file ${fileId}: ${storagePrice} USDFC`);
-      await this.contractService.depositPayment(fileId, storagePrice);
-
-      setTimeout(async () => {
-        try {
-          await this.contractService.confirmStorage(fileId);
-          console.log(`Auto-confirmed storage for file ${fileId}`);
-        } catch (error) {
-          console.error(`Failed to auto-confirm storage for file ${fileId}:`, error);
-        }
-      }, 2000);
-
       return {
         fileId,
-        pieceCid: finalPieceCid,
+        pieceCid,
         size: uint8ArrayBytes.length,
         filename,
         storagePrice: storagePrice.toString(),
         uploadedAt: new Date(),
-        synapseStxHash,
+        selectedProvider: {
+          id: selectedProvider?.id ?? -1,
+          address: selectedProvider?.serviceProvider ?? "auto-selected",
+          name: selectedProvider?.name ?? "auto-selected",
+        },
+        dataSetId: selectedDataSetId ?? undefined,
+        uploadTxHash,
         contractTxHash,
       };
     } catch (error) {
@@ -98,7 +229,7 @@ export class StorageService {
   }
 
   async downloadFile(pieceCid: string): Promise<DownloadResult> {
-    const synapse = getSynapse();
+    const synapse = this.synapseProvider();
 
     try {
       console.log(`Downloading ${pieceCid}...`);
@@ -115,8 +246,150 @@ export class StorageService {
     }
   }
 
+  async payForFile(fileIdOrCid: number | string): Promise<PaymentResult> {
+    const fileId =
+      typeof fileIdOrCid === "number"
+        ? fileIdOrCid
+        : await this.contractService.getFileIdByCid(fileIdOrCid);
+
+    if (!fileId) {
+      throw new Error("File not found for payment");
+    }
+
+    const file = await this.contractService.getFile(fileId);
+    const paymentTxHash = await this.contractService.depositPayment(
+      fileId,
+      file.storagePrice,
+    );
+
+    this.pendingConfirmations.set(fileId, {
+      fileId,
+      pieceCid: file.pieceCid,
+      attempts: 0,
+    });
+    await this.processPendingConfirmations();
+
+    return {
+      fileId,
+      pieceCid: file.pieceCid,
+      amount: file.storagePrice.toString(),
+      paymentTxHash,
+      status: "paid",
+      confirmationQueued: true,
+    };
+  }
+
+  async ensureFileStored(pieceCid: string): Promise<void> {
+    const fileId = await this.contractService.getFileIdByCid(pieceCid);
+    if (!fileId) {
+      throw new Error("File not found");
+    }
+
+    const file = await this.contractService.getFile(fileId);
+    if (file.status < 2) {
+      throw new Error("File is not stored yet");
+    }
+  }
+
+  async getFileStatus(fileIdOrCid: number | string) {
+    const fileId =
+      typeof fileIdOrCid === "number"
+        ? fileIdOrCid
+        : await this.contractService.getFileIdByCid(fileIdOrCid);
+
+    if (!fileId) {
+      throw new Error("File not found");
+    }
+
+    const file = await this.contractService.getFile(fileId);
+    const payment = await this.contractService.getFilePaymentStatus(fileId);
+
+    return {
+      fileId,
+      pieceCid: file.pieceCid,
+      status: file.status,
+      timestamps: {
+        uploadTime: file.uploadTime,
+        paidTime: file.paidTime,
+        storedTime: file.storedTime,
+      },
+      payment: {
+        hasPayment: payment.hasPayment,
+        amount: payment.amount.toString(),
+        isReleased: payment.isReleased,
+      },
+      queuedForConfirmation: this.pendingConfirmations.has(fileId),
+    };
+  }
+
+  private async processPendingConfirmations(): Promise<void> {
+    for (const [fileId, pending] of this.pendingConfirmations) {
+      if (this.activeConfirmations.has(fileId)) {
+        continue;
+      }
+
+      this.activeConfirmations.add(fileId);
+      try {
+        await this.processSingleConfirmation(pending);
+      } finally {
+        this.activeConfirmations.delete(fileId);
+      }
+    }
+  }
+
+  private async processSingleConfirmation(
+    pending: PendingConfirmation,
+  ): Promise<void> {
+    const available = await this.isPieceRetrievable(pending.pieceCid);
+
+    if (!available) {
+      pending.attempts += 1;
+      this.pendingConfirmations.set(pending.fileId, pending);
+      if (pending.attempts >= this.maxConfirmationAttempts) {
+        console.warn(
+          `Storage confirmation timed out for file ${pending.fileId} (${pending.pieceCid})`,
+        );
+        this.pendingConfirmations.delete(pending.fileId);
+      }
+      return;
+    }
+
+    await this.contractService.confirmStorage(pending.fileId);
+    console.log(
+      JSON.stringify({
+        event: "FileStored",
+        fileId: pending.fileId,
+        pieceCid: pending.pieceCid,
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
+    await this.contractService.releasePayment(pending.fileId);
+    console.log(
+      JSON.stringify({
+        event: "PaymentReleased",
+        fileId: pending.fileId,
+        pieceCid: pending.pieceCid,
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
+    this.pendingConfirmations.delete(pending.fileId);
+  }
+
+  private async isPieceRetrievable(pieceCid: string): Promise<boolean> {
+    const synapse = this.synapseProvider();
+
+    try {
+      await synapse.storage.download(pieceCid, { withCDN: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async preflightCheck(fileSize: number) {
-    const synapse = getSynapse();
+    const synapse = this.synapseProvider();
 
     try {
       const preflight = await synapse.storage.preflightUpload(fileSize);
@@ -149,7 +422,7 @@ export class StorageService {
   }
 
   async getAccountInfo() {
-    const synapse = getSynapse();
+    const synapse = this.synapseProvider();
 
     try {
       const accountInfo = await synapse.payments.accountInfo();
@@ -172,7 +445,7 @@ export class StorageService {
   }
 
   async setupAccount(depositAmount?: string) {
-    const synapse = getSynapse();
+    const synapse = this.synapseProvider();
 
     try {
       const depositAmountWei = depositAmount

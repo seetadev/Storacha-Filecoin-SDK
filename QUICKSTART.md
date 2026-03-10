@@ -243,6 +243,28 @@ cd frontend
 pnpm dev  # Hot reloads on changes
 ```
 
+### Live Calibration Test
+
+Run an end-to-end live test (upload -> pay -> store/release -> retrieve) against Calibration:
+
+```bash
+# Terminal 1: run backend with calibration env
+cd backend
+pnpm dev
+
+# Terminal 2: run calibration test
+cd backend
+BACKEND_URL=http://localhost:3000 \
+FILECOIN_RPC_URL=https://api.calibration.node.glif.io/rpc/v1 \
+FILECOIN_NETWORK=calibration \
+pnpm test:calibration
+```
+
+Optional environment variables:
+
+- `SMOKE_TIMEOUT_SECONDS` (default `300`)
+- `SMOKE_POLL_INTERVAL_MS` (default `10000`)
+
 ### View Logs
 
 - Backend: Terminal running `pnpm dev`
