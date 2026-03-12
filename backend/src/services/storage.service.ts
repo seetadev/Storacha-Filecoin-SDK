@@ -490,4 +490,58 @@ export class StorageService {
       throw error;
     }
   }
+
+  async getStoragePrice() {
+    const synapse = getSynapse();
+
+    try {
+      console.log("Fetching dynamic storage price from filecoin network...");
+
+      const ONE_GIB = 1024 * 1024 * 1024;
+      const preflight = await synapse.storage.preflightUpload(ONE_GIB);
+
+      const estimatedCost = preflight.estimatedCost as any;
+      const costPerMonthWei = BigInt(estimatedCost?.perMonth ?? estimatedCost ?? 0n);
+
+      if (costPerMonthWei === 0n) {
+        throw new Error("Failed to retrieve valid pricing from Synapse SDK");
+      }
+
+      const pricePerByteWei = costPerMonthWei / BigInt(ONE_GIB);
+      console.log(`New Dynamic Price: ${pricePerByteWei.toString()} wei per byte`);
+
+      const provider = new ethers.JsonRpcProvider(config.filecoin.rpcUrl);
+      const wallet = new ethers.Wallet(config.filecoin.privateKey, provider);
+
+      const FILE_REGISTRY_ABI = [
+        "function updateStoragePrice(uint256 newPricePerByte) external",
+        "function pricePerByte() external view returns (uint256)"
+      ];
+
+      const registryAddress = config.filecoin.fileRegistryAddress;
+      const registry = new ethers.Contract(registryAddress, FILE_REGISTRY_ABI, wallet);
+
+      console.log(`Updating FileRegistry contract at ${registryAddress}...`);
+      const tx = await registry.updateStoragePrice(pricePerByteWei);
+
+      if (!config.filecoin.paymentEscrowAddress) {
+      throw new Error("PAYMENT_ESCROW_ADDRESS is required");
+     }
+      
+      console.log(`Transaction submitted! Waiting for confirmation... Hash: ${tx.hash}`);
+      await tx.wait(); 
+      
+      console.log("Contract successfully updated!");
+
+      return {
+        success: true,
+        newPricePerByteWei: pricePerByteWei.toString(),
+        newPricePerByteUSDFC: ethers.formatUnits(pricePerByteWei, 18),
+        txHash: tx.hash
+      };
+    } catch (error) {
+      console.error("Price sync failed:", error);
+      throw error;
+    }
+  }
 }
