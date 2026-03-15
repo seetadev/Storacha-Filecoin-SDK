@@ -314,6 +314,24 @@ export function createStorageRouter(
     },
   );
 
+  router.post(
+  "/get-storage-price",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      console.log("\Syncing Dynamic Storage Price");
+      const result = await storageService.getStoragePrice();
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      console.error("Sync price endpoint error:", error);
+      next(error);
+    }
+  }
+);
+
   return router;
 }
 

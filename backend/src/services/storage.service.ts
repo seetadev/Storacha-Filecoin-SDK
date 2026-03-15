@@ -1,6 +1,7 @@
 import { getSynapse } from "../config/synapse.js";
 import { getContractService } from "./contract.service.js";
 import { ethers } from "ethers";
+import { config } from "../config/env.js";
 
 export interface UploadResult {
   fileId: number;
@@ -487,6 +488,62 @@ export class StorageService {
       };
     } catch (error) {
       console.error("Setup failed:", error);
+      throw error;
+    }
+  }
+
+async getStoragePrice() {
+    const synapse = getSynapse();
+
+    try {
+      console.log("Fetching dynamic storage price from filecoin network...");
+
+      // 👇 FIX: Use exactly 1,000,000,000 bytes (1 GB) to stay under the 1016 MiB limit
+      const ONE_GB = 1000 * 1000 * 1000; 
+      const preflight = await synapse.storage.preflightUpload(ONE_GB);
+
+      const estimatedCost = preflight.estimatedCost as any;
+      const costPerMonthWei = BigInt(estimatedCost?.perMonth ?? estimatedCost ?? 0n);
+
+      if (costPerMonthWei === 0n) {
+        throw new Error("Failed to retrieve valid pricing from Synapse SDK");
+      }
+
+      // 👇 FIX: Divide by ONE_GB instead
+      const pricePerByteWei = costPerMonthWei / BigInt(ONE_GB);
+      console.log(`New Dynamic Price: ${pricePerByteWei.toString()} wei per byte`);
+
+      const provider = new ethers.JsonRpcProvider(config.filecoin.rpcUrl);
+      const wallet = new ethers.Wallet(config.filecoin.privateKey, provider);
+
+      const FILE_REGISTRY_ABI = [
+        "function updateStoragePrice(uint256 newPricePerByte) external",
+        "function pricePerByte() external view returns (uint256)"
+      ];
+
+      const registryAddress = config.filecoin.fileRegistryAddress;
+      const registry = new ethers.Contract(registryAddress, FILE_REGISTRY_ABI, wallet);
+
+      console.log(`Updating FileRegistry contract at ${registryAddress}...`);
+      const tx = await registry.updateStoragePrice(pricePerByteWei);
+
+      if (!config.filecoin.paymentEscrowAddress) {
+        throw new Error("PAYMENT_ESCROW_ADDRESS is required");
+      }
+      
+      console.log(`Transaction submitted! Waiting for confirmation... Hash: ${tx.hash}`);
+      await tx.wait(); 
+      
+      console.log("Contract successfully updated!");
+
+      return {
+        success: true,
+        newPricePerByteWei: pricePerByteWei.toString(),
+        newPricePerByteUSDFC: ethers.formatUnits(pricePerByteWei, 18),
+        txHash: tx.hash
+      };
+    } catch (error) {
+      console.error("Price sync failed:", error);
       throw error;
     }
   }
