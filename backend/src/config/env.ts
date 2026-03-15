@@ -13,6 +13,8 @@ export const config = {
       "https://api.calibration.node.glif.io/rpc/v1",
     glifAuthToken: process.env.GLIF_AUTH_TOKEN,
     fileRegistryAddress: process.env.FILE_REGISTRY_ADDRESS || "",
+    paymentEscrowAddress: process.env.PAYMENT_ESCROW_ADDRESS || "",
+
   },
 
   upload: {

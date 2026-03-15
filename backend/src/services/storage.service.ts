@@ -1,6 +1,7 @@
 import { getSynapse } from "../config/synapse.js";
 import { getContractService } from "./contract.service.js";
 import { ethers } from "ethers";
+import { config } from "../config/env.js";
 
 export interface UploadResult {
   fileId: number;
@@ -491,14 +492,15 @@ export class StorageService {
     }
   }
 
-  async getStoragePrice() {
+async getStoragePrice() {
     const synapse = getSynapse();
 
     try {
       console.log("Fetching dynamic storage price from filecoin network...");
 
-      const ONE_GIB = 1024 * 1024 * 1024;
-      const preflight = await synapse.storage.preflightUpload(ONE_GIB);
+      // 👇 FIX: Use exactly 1,000,000,000 bytes (1 GB) to stay under the 1016 MiB limit
+      const ONE_GB = 1000 * 1000 * 1000; 
+      const preflight = await synapse.storage.preflightUpload(ONE_GB);
 
       const estimatedCost = preflight.estimatedCost as any;
       const costPerMonthWei = BigInt(estimatedCost?.perMonth ?? estimatedCost ?? 0n);
@@ -507,7 +509,8 @@ export class StorageService {
         throw new Error("Failed to retrieve valid pricing from Synapse SDK");
       }
 
-      const pricePerByteWei = costPerMonthWei / BigInt(ONE_GIB);
+      // 👇 FIX: Divide by ONE_GB instead
+      const pricePerByteWei = costPerMonthWei / BigInt(ONE_GB);
       console.log(`New Dynamic Price: ${pricePerByteWei.toString()} wei per byte`);
 
       const provider = new ethers.JsonRpcProvider(config.filecoin.rpcUrl);
@@ -525,8 +528,8 @@ export class StorageService {
       const tx = await registry.updateStoragePrice(pricePerByteWei);
 
       if (!config.filecoin.paymentEscrowAddress) {
-      throw new Error("PAYMENT_ESCROW_ADDRESS is required");
-     }
+        throw new Error("PAYMENT_ESCROW_ADDRESS is required");
+      }
       
       console.log(`Transaction submitted! Waiting for confirmation... Hash: ${tx.hash}`);
       await tx.wait(); 
