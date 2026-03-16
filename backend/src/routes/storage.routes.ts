@@ -314,6 +314,38 @@ export function createStorageRouter(
     },
   );
 
+  router.post(
+  "/provider/settle",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { fileId } = req.body;
+
+      if (!fileId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "fileId is required in the request body" 
+        });
+      }
+
+      console.log(`\n=== Settling Provider Rewards for File ID: ${fileId} ===`);
+      const result = await storageService.settleProviderRewards(Number(fileId));
+
+      res.json({
+        success: true,
+        message: `Successfully settled rewards for File ${fileId}`,
+        data: result,
+      });
+    } catch (error: any) {
+      console.error("Settlement endpoint error:", error);
+      // Return 400 for business logic errors (like "Already released") so the frontend handles it cleanly
+      res.status(400).json({
+        success: false,
+        error: error.message || "Failed to settle provider rewards",
+      });
+    }
+  }
+);
+
   return router;
 }
 

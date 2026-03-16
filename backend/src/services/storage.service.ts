@@ -1,6 +1,8 @@
 import { getSynapse } from "../config/synapse.js";
 import { getContractService } from "./contract.service.js";
 import { ethers } from "ethers";
+import { config } from "../config/env.js";
+
 
 export interface UploadResult {
   fileId: number;
@@ -257,6 +259,36 @@ export class StorageService {
     }
 
     const file = await this.contractService.getFile(fileId);
+    console.log(`Approving Escrow Contract to spend ${file.storagePrice} wei of USDFC...`);
+    const provider = new ethers.JsonRpcProvider(config.filecoin.rpcUrl);
+    const wallet = new ethers.Wallet(config.filecoin.privateKey, provider)
+
+    const ERC20_ABI = [
+      "function approve(address spender, uint256 amount) public returns (bool)",
+      "function allowance(address owner, address spender) public view returns (uint256)"
+    ];
+
+    const usdfcAddress = "0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"; 
+    const escrowAddress = config.filecoin.paymentEscrowAddress as string;
+    const usdfcContract = new ethers.Contract(usdfcAddress, ERC20_ABI, wallet);
+
+    const currentAllowance = await usdfcContract.allowance(wallet.address, escrowAddress);
+
+    if (currentAllowance < file.storagePrice) {
+      console.log(`Approving Escrow Contract for unlimited USDFC...`);
+      const approveTx = await usdfcContract.approve(escrowAddress, ethers.MaxUint256);
+      await approveTx.wait();
+      
+      console.log(`Approval mined! Waiting 15 seconds for Filecoin nodes to sync...`);
+      await new Promise(resolve => setTimeout(resolve, 15000));
+    } else {
+      console.log(`Escrow already has sufficient allowance. Proceeding...`);
+    }
+
+    const approveTx = await usdfcContract.approve(escrowAddress, file.storagePrice);
+    await approveTx.wait();
+    console.log(`Escrow successfully approved!`);
+    
     const paymentTxHash = await this.contractService.depositPayment(
       fileId,
       file.storagePrice,
@@ -267,7 +299,8 @@ export class StorageService {
       pieceCid: file.pieceCid,
       attempts: 0,
     });
-    await this.processPendingConfirmations();
+
+    this.processPendingConfirmations().catch(console.error);
 
     return {
       fileId,
@@ -490,4 +523,81 @@ export class StorageService {
       throw error;
     }
   }
+
+
+async settleProviderRewards(fileId: number) {
+    try {
+      console.log(`\n=== Initiating Settlement for File ID: ${fileId} ===`);
+
+      const provider = new ethers.JsonRpcProvider(config.filecoin.rpcUrl);
+      const wallet = new ethers.Wallet(config.filecoin.privateKey, provider);
+
+      const FILE_REGISTRY_ABI = [
+        "function getFile(uint256 fileId) external view returns (string pieceCid, address uploader, uint256 fileSize, uint256 storagePrice, uint256 uploadTime, uint256 paidTime, uint256 storedTime, uint8 status, bytes32 metadataHash, bool exists)",
+        "function confirmStorage(uint256 fileId) external",
+        "function getFileStatus(uint256 fileId) external view returns (bool isPaid, bool isStored)"
+      ];
+      const PAYMENT_ESCROW_ABI = [
+        "function releasePayment(uint256 fileId) external",
+        "function getFilePaymentStatus(uint256 fileId) external view returns (bool hasPayment, uint256 amount, bool isReleased)"
+      ];
+
+      const registryAddress = config.filecoin.fileRegistryAddress as string;
+      const escrowAddress = config.filecoin.paymentEscrowAddress as string;
+      
+      if (!registryAddress || !escrowAddress) {
+        throw new Error("Smart contract addresses are missing from environment variables.");
+      }
+
+      const registry = new ethers.Contract(registryAddress, FILE_REGISTRY_ABI, wallet);
+      const escrow = new ethers.Contract(escrowAddress, PAYMENT_ESCROW_ABI, wallet);
+
+      const [isPaid, isStored] = await registry.getFileStatus(fileId);
+      const [hasPayment, amount, isReleased] = await escrow.getFilePaymentStatus(fileId);
+
+      if (isReleased) throw new Error("Payment has already been released.");
+      if (!isPaid || !hasPayment) throw new Error("File has not been paid for yet.");
+
+      let confirmStorageTxHash = null;
+
+      if (!isStored) {
+        const fileData = await registry.getFile(fileId);
+        const pieceCid = fileData.pieceCid;
+
+        console.log(`Checking Synapse network for pieceCid: ${pieceCid}...`);
+        
+        const isActuallyStored = await this.isPieceRetrievable(pieceCid); 
+
+        if (!isActuallyStored) {
+          throw new Error(`Synapse network confirms pieceCid ${pieceCid} is NOT retrievable yet. Cannot release funds.`);
+        }
+
+        console.log(`Synapse Verification Passed! Confirming storage on-chain...`);
+        const tx1 = await registry.confirmStorage(fileId);
+        await tx1.wait();
+        confirmStorageTxHash = tx1.hash;
+        console.log(`Storage confirmed! Hash: ${tx1.hash}`);
+      } else {
+        console.log("Storage already confirmed. Skipping to payment release...");
+      }
+
+      console.log(`Releasing ${ethers.formatUnits(amount, 18)} USDFC...`);
+      const tx2 = await escrow.releasePayment(fileId);
+      await tx2.wait();
+      console.log(`Payment released! Hash: ${tx2.hash}`);
+
+      return {
+        success: true,
+        fileId,
+        amountReleasedUSDFC: ethers.formatUnits(amount, 18),
+        confirmStorageTxHash,
+        releasePaymentTxHash: tx2.hash
+      };
+
+    } catch (error) {
+      console.error("Provider settlement failed:", error);
+      throw error;
+    }
+  }
 }
+

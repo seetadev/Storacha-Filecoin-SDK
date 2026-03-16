@@ -23,12 +23,12 @@
     "deployedAt": "2025-12-01T16:57:02.447Z",
     "contracts": {
       "FileRegistry": {
-        "address": "0x36AFEF1BECfD122a6786b768A6C995093312aa71",
-        "transactionHash": "0x2b62f73cb2c03bc80383ef873a992f39b57e4be990cf83dd7edd1a125801082e"
+        "address": "0x0e6F87b812f25abeccF69a3734CE47Ec7e08946D",
+        "transactionHash": "..."
       },
       "PaymentEscrow": {
-        "address": "0xBB5461f038459Aa2EBD656481Db42f84456d1eff",
-        "transactionHash": "0xeeb0f5e8250f15168e54eed47bf7b145c26388e91386a7873cdbe3d4eba322e5"
+        "address": "0x090699c1b54e6ed4A7dE334a4FA482d773c4457c",
+        "transactionHash": "..."
       }
     },
     "dependencies": {
