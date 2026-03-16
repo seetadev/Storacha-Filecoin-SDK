@@ -8,19 +8,23 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
 interface IFileRegistry {
+    enum FileStatus { Uploaded, Paid, Stored, Retrieved }
+    
+    struct FileRecord {
+        string pieceCid;
+        address uploader;
+        uint256 fileSize;
+        uint256 storagePrice;
+        uint256 uploadTime;
+        uint256 paidTime;
+        uint256 storedTime;
+        FileStatus status;
+        bytes32 metadataHash;
+        bool exists;
+    }
+
     function linkPayment(uint256 fileId, address payer, uint256 amount) external;
-    function getFile(uint256 fileId) external view returns (
-        string memory pieceCid,
-        address uploader,
-        uint256 fileSize,
-        uint256 storagePrice,
-        uint256 uploadTime,
-        uint256 paidTime,
-        uint256 storedTime,
-        uint8 status,
-        bytes32 metadataHash,
-        bool exists
-    );
+    function getFile(uint256 fileId) external view returns (FileRecord memory);
     function getFileStatus(uint256 fileId) external view returns (bool isPaid, bool isStored);
 }
 
@@ -102,22 +106,11 @@ contract PaymentEscrow is Ownable, ReentrancyGuard, Pausable {
      * @param amount Amount to deposit (must match file's storage price)
      */
     function depositForFile(uint256 fileId, uint256 amount) external whenNotPaused nonReentrant {
-        // Verify file exists and get details
-        (
-            , // pieceCid
-            , // uploader
-            , // fileSize
-            uint256 storagePrice,
-            , // uploadTime
-            , // paidTime
-            , // storedTime
-            , // status
-            , // metadataHash
-            bool exists
-        ) = fileRegistry.getFile(fileId);
 
-        require(exists, "PaymentEscrow: File not found");
-        require(amount == storagePrice, "PaymentEscrow: Incorrect payment amount");
+        IFileRegistry.FileRecord memory file = fileRegistry.getFile(fileId);
+
+        require(file.exists, "PaymentEscrow: File not found");
+        require(amount == file.storagePrice, "PaymentEscrow: Incorrect payment amount");
         require(fileToEscrow[fileId] == 0, "PaymentEscrow: File already paid");
 
         // Check file hasn't been paid yet
