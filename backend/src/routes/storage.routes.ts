@@ -195,3 +195,24 @@ router.post(
   }
 );
 export default router;
+
+router.post('/subscribe', async (req, res) => {
+  try {
+    const { planSizeGB } = req.body;
+
+    if (!planSizeGB || typeof planSizeGB !== 'number') {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Missing or invalid planSizeGB. Please provide a number." 
+      });
+    }
+
+    // Assuming your StorageService is instantiated as 'storageService'
+    const result = await storageService.subscribeStorage(planSizeGB);
+    
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error("Subscription endpoint error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});

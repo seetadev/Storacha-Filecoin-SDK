@@ -235,10 +235,14 @@ export class StorageService {
 
       console.log(`Updating FileRegistry contract at ${registryAddress}...`);
       const tx = await registry.updateStoragePrice(pricePerByteWei);
+
+      if (!config.filecoin.paymentEscrowAddress) {
+      throw new Error("PAYMENT_ESCROW_ADDRESS is required");
+     }
       
       console.log(`Transaction submitted! Waiting for confirmation... Hash: ${tx.hash}`);
       await tx.wait(); 
-
+      
       console.log("Contract successfully updated!");
 
       return {
@@ -252,4 +256,64 @@ export class StorageService {
       throw error;
     }
   }
+
+  /**
+   * Subscribe to a prepaid storage plan
+   * @param planSizeGB The size of the storage plan in Gigabytes
+   */
+  async subscribeStorage(planSizeGB: number) {
+    console.log(`=== Initiating Storage Subscription: ${planSizeGB} GB ===`);
+    
+    const provider = new ethers.JsonRpcProvider(config.filecoin.rpcUrl);
+    const wallet = new ethers.Wallet(config.filecoin.privateKey, provider);
+    
+    // 1. Calculate USDFC cost dynamically from the Registry
+    const REGISTRY_ABI = ["function pricePerByte() view returns (uint256)"];
+    const registry = new ethers.Contract(config.filecoin.fileRegistryAddress as string, REGISTRY_ABI, provider);
+    
+    const pricePerByte = await registry.pricePerByte();
+    const bytesInGB = BigInt(1073741824); // 1024^3
+    const totalBytes = BigInt(planSizeGB) * bytesInGB;
+    const subscriptionCost = totalBytes * pricePerByte;
+    
+    console.log(`Plan Cost: ${subscriptionCost.toString()} wei of USDFC`);
+
+    const usdfcAddress = "0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"; 
+    const escrowAddress = config.filecoin.paymentEscrowAddress as string;
+
+    // 2. Ensure Escrow is approved to pull the subscription funds
+    const ERC20_ABI = [
+      "function approve(address, uint256) public returns (bool)",
+      "function allowance(address, address) public view returns (uint256)"
+    ];
+    const usdfcContract = new ethers.Contract(usdfcAddress, ERC20_ABI, wallet);
+    
+    const currentAllowance = await usdfcContract.allowance(wallet.address, escrowAddress);
+    if (currentAllowance < subscriptionCost) {
+      console.log(`Approving USDFC for subscription...`);
+      const approveTx = await usdfcContract.approve(escrowAddress, ethers.MaxUint256);
+      await approveTx.wait();
+      // Brief buffer for Filecoin testnet sync
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+
+    // 3. Fund the Subscription on the Escrow Contract
+    const ESCROW_ABI = ["function fundSubscription(uint256) external"];
+    const escrowContract = new ethers.Contract(escrowAddress, ESCROW_ABI, wallet);
+    
+    console.log(`Funding subscription on-chain...`);
+    const fundTx = await escrowContract.fundSubscription(subscriptionCost);
+    await fundTx.wait();
+
+    console.log(`✅ Subscription funded successfully! Hash: ${fundTx.hash}`);
+
+    return {
+      planSizeGB,
+      costWei: subscriptionCost.toString(),
+      txHash: fundTx.hash,
+      status: "active"
+    };
+  }
 }
+
+
