@@ -397,3 +397,40 @@ export class StorageService {
       manifest // Return the manifest structure so the frontend can display it
     };
   }
+
+  /**
+   * Pay for an AI Dataset using USDFC (utilizes Prepaid Subscription if funded)
+   * @param datasetId The ID of the dataset to pay for
+   */
+  async payDataset(datasetId: number) {
+    console.log(`=== Initiating Payment for Dataset ID: ${datasetId} ===`);
+
+    const provider = new ethers.JsonRpcProvider(config.filecoin.rpcUrl);
+    const wallet = new ethers.Wallet(config.filecoin.privateKey, provider);
+    
+    // Fetch Dataset Pricing from Registry
+    const REGISTRY_ABI = ["function getDataset(uint256) external view returns (tuple(string manifestCid, address uploader, uint256 fileCount, uint256 totalSize, uint256 storagePrice, uint256 uploadTime, uint256 paidTime, uint256 storedTime, uint8 status, bool exists))"];
+    const registry = new ethers.Contract(config.filecoin.fileRegistryAddress as string, REGISTRY_ABI, provider);
+    
+    const dataset = await registry.getDataset(datasetId);
+    if (!dataset.exists) throw new Error("Dataset not found on-chain");
+
+    const amountWei = dataset.storagePrice;
+    console.log(`Dataset requires ${amountWei.toString()} wei of USDFC`);
+
+    const ESCROW_ABI = ["function depositForDataset(uint256, uint256) external"];
+    const escrow = new ethers.Contract(config.filecoin.paymentEscrowAddress as string, ESCROW_ABI, wallet);
+
+    console.log("Locking payment in Escrow (Will use Prepaid Balance if available)...");
+    const tx = await escrow.depositForDataset(datasetId, amountWei);
+    await tx.wait();
+
+    console.log(`✅ Dataset ${datasetId} paid successfully! Hash: ${tx.hash}`);
+
+    return {
+      datasetId,
+      amount: amountWei.toString(),
+      paymentTxHash: tx.hash,
+      status: "paid"
+    };
+  }

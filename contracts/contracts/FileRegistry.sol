@@ -101,6 +101,71 @@ contract FileRegistry is Ownable, ReentrancyGuard, Pausable {
 
     constructor() Ownable(msg.sender) {}
 
+
+    /**
+     * @dev Register a new AI Dataset Bundle
+     */
+    function registerDataset(
+        string calldata manifestCid,
+        uint256 fileCount,
+        uint256 totalSize
+    ) external whenNotPaused nonReentrant returns (uint256 datasetId) {
+        require(bytes(manifestCid).length > 0, "FileRegistry: Empty manifest CID");
+        require(fileCount > 0, "FileRegistry: Zero files");
+        require(totalSize > 0, "FileRegistry: Zero total size");
+        require(manifestToDatasetId[manifestCid] == 0, "FileRegistry: Dataset already exists");
+
+        datasetId = nextDatasetId++;
+        uint256 storagePrice = calculateStoragePrice(totalSize); // Volume-based pricing
+
+        DatasetRecord storage dataset = datasets[datasetId];
+        dataset.manifestCid = manifestCid;
+        dataset.uploader = msg.sender;
+        dataset.fileCount = fileCount;
+        dataset.totalSize = totalSize;
+        dataset.storagePrice = storagePrice;
+        dataset.uploadTime = block.timestamp;
+        dataset.status = FileStatus.Uploaded;
+        dataset.exists = true;
+
+        manifestToDatasetId[manifestCid] = datasetId;
+        userDatasets[msg.sender].push(datasetId);
+        totalDatasets++;
+
+        emit DatasetRegistered(datasetId, manifestCid, msg.sender, fileCount, totalSize, storagePrice);
+    }
+
+    /**
+     * @dev Get dataset information
+     */
+    function getDataset(uint256 datasetId) external view returns (DatasetRecord memory dataset) {
+        require(datasets[datasetId].exists, "FileRegistry: Dataset not found");
+        dataset = datasets[datasetId];
+    }
+
+    /**
+     * @dev Link payment to a dataset
+     */
+    function linkDatasetPayment(uint256 datasetId, address payer, uint256 amount) external whenNotPaused {
+        require(datasets[datasetId].exists, "FileRegistry: Dataset not found");
+        require(datasets[datasetId].status == FileStatus.Uploaded, "FileRegistry: Invalid status");
+
+        datasets[datasetId].status = FileStatus.Paid;
+        datasets[datasetId].paidTime = block.timestamp;
+
+        emit DatasetPaymentLinked(datasetId, payer, amount);
+    }
+
+    /**
+     * @dev Check if dataset is paid and stored
+     */
+    function getDatasetStatus(uint256 datasetId) external view returns (bool isPaid, bool isStored) {
+        require(datasets[datasetId].exists, "FileRegistry: Dataset not found");
+        FileStatus status = datasets[datasetId].status;
+        isPaid = (status == FileStatus.Paid || status == FileStatus.Stored || status == FileStatus.Retrieved);
+        isStored = (status == FileStatus.Stored || status == FileStatus.Retrieved);
+    }
+    
     /**
      * @dev Register a new file upload
      * @param pieceCid Filecoin Piece CID
@@ -274,3 +339,4 @@ contract FileRegistry is Ownable, ReentrancyGuard, Pausable {
         currentPricePerByte = pricePerByte;
     }
 }
+

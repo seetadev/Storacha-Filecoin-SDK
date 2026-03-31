@@ -21,7 +21,27 @@ interface IFileRegistry {
         bytes32 metadataHash,
         bool exists
     );
+
+    struct DatasetRecord {
+        string manifestCid;
+        address uploader;
+        uint256 fileCount;
+        uint256 totalSize;
+        uint256 storagePrice;
+        uint256 uploadTime;
+        uint256 paidTime;
+        uint256 storedTime;
+        FileStatus status;
+        bool exists;
+    }
+
+    function linkPayment(uint256 fileId, address payer, uint256 amount) external;
+    function getFile(uint256 fileId) external view returns (FileRecord memory);
     function getFileStatus(uint256 fileId) external view returns (bool isPaid, bool isStored);
+
+    function linkDatasetPayment(uint256 datasetId, address payer, uint256 amount) external;
+    function getDataset(uint256 datasetId) external view returns (DatasetRecord memory);
+    function getDatasetStatus(uint256 datasetId) external view returns (bool isPaid, bool isStored);
 }
 
 /**
@@ -50,6 +70,7 @@ contract PaymentEscrow is Ownable, ReentrancyGuard, Pausable {
     mapping(uint256 => uint256) public fileToEscrow; // fileId => escrowId
     mapping(address => uint256[]) public userEscrows;
     mapping(address => uint256) public prepaidBalances;
+    mapping(uint256 => uint256) public datasetToEscrow; // datasetId => escrowId
 
     uint256 public nextEscrowId = 1;
     address public treasury; // Where payments are sent (storage provider)

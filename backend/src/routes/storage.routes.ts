@@ -241,4 +241,20 @@ router.post('/dataset/upload', upload.array('files', 50), async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+router.post('/dataset/pay', async (req, res) => {
+  try {
+    const { datasetId } = req.body;
+
+    if (!datasetId) {
+      return res.status(400).json({ success: false, error: "Missing datasetId" });
+    }
+
+    const result = await storageService.payDataset(Number(datasetId));
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error("Dataset payment endpoint error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 export default router;
