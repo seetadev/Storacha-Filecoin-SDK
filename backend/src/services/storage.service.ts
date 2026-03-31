@@ -316,4 +316,84 @@ export class StorageService {
   }
 }
 
+/**
+   * Upload multiple files as a single verifiable AI Dataset
+   * @param files Array of uploaded Express.Multer files
+   */
+  async uploadDataset(files: Express.Multer.File[]) {
+    console.log(`=== Initiating AI Dataset Upload: ${files.length} files ===`);
 
+    if (!files || files.length === 0) {
+      throw new Error("No files provided for dataset");
+    }
+
+    const uploadedFilesData = [];
+    let totalSize = 0;
+
+    // Upload each individual file to the decentralized network
+    console.log("Uploading individual files to Storacha...");
+    for (const file of files) {
+      // NOTE: Replace this line with your actual Storacha/Synapse upload call
+      const pieceCid = await this.uploadToStoracha(file.path); 
+      
+      totalSize += file.size;
+      uploadedFilesData.push({
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        pieceCid: pieceCid
+      });
+    }
+
+    // Generate the Deterministic JSON Manifest
+    console.log("Generating Dataset Manifest...");
+    const manifest = {
+      name: `AI_Dataset_${Date.now()}`,
+      version: "1.0",
+      createdAt: new Date().toISOString(),
+      fileCount: files.length,
+      totalSizeBytes: totalSize,
+      files: uploadedFilesData
+    };
+
+    // 3. Upload the Manifest itself to the network to get the Master CID
+    const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2));
+    // NOTE: Replace with your actual buffer upload logic
+    const manifestCid = await this.uploadToStorachaBuffer(manifestBuffer); 
+    console.log(`Master Manifest CID: ${manifestCid}`);
+
+    // 4. Register the Dataset on the Smart Contract
+    console.log("Registering Dataset Provenance on-chain");
+    const provider = new ethers.JsonRpcProvider(config.filecoin.rpcUrl);
+    const wallet = new ethers.Wallet(config.filecoin.privateKey, provider);
+    
+    const REGISTRY_ABI = [
+      "function registerDataset(string calldata, uint256, uint256) external returns (uint256)",
+      "event DatasetRegistered(uint256 indexed datasetId, string indexed manifestCid, address indexed uploader, uint256 fileCount, uint256 totalSize, uint256 storagePrice)"
+    ];
+    
+    const registry = new ethers.Contract(config.filecoin.fileRegistryAddress as string, REGISTRY_ABI, wallet);
+    
+    const tx = await registry.registerDataset(manifestCid, files.length, totalSize);
+    const receipt = await tx.wait();
+
+    // Extract the new Dataset ID and dynamically calculated price from the event logs
+    const event = receipt.logs
+        .map((log: any) => registry.interface.parseLog(log))
+        .find((parsedLog: any) => parsedLog?.name === 'DatasetRegistered');
+
+    const datasetId = event?.args[0].toString();
+    const storagePrice = event?.args[5].toString();
+
+    console.log(`✅ Dataset ${datasetId} registered successfully! Price: ${storagePrice} wei`);
+
+    return {
+      datasetId,
+      manifestCid,
+      fileCount: files.length,
+      totalSize,
+      storagePrice,
+      txHash: tx.hash,
+      manifest // Return the manifest structure so the frontend can display it
+    };
+  }

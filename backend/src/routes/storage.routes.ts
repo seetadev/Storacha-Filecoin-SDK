@@ -194,7 +194,6 @@ router.post(
     }
   }
 );
-export default router;
 
 router.post('/subscribe', async (req, res) => {
   try {
@@ -216,3 +215,30 @@ router.post('/subscribe', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// Allow uploading up to 50 files in a single dataset batch
+router.post('/dataset/upload', upload.array('files', 50), async (req, res) => {
+  try {
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "No files uploaded. Please attach files to the 'files' field." 
+      });
+    }
+
+    const result = await storageService.uploadDataset(files);
+    
+    res.json({ 
+      success: true, 
+      message: "AI Dataset successfully bundled and registered on-chain",
+      data: result 
+    });
+
+  } catch (error: any) {
+    console.error("Dataset upload endpoint error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+export default router;

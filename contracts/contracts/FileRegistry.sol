@@ -32,6 +32,19 @@ contract FileRegistry is Ownable, ReentrancyGuard, Pausable {
         bool exists;           // Flag to check if record exists
     }
 
+    struct DatasetRecord {
+        string manifestCid;    
+        address uploader;      
+        uint256 fileCount;      
+        uint256 totalSize;      
+        uint256 storagePrice;   
+        uint256 uploadTime;     
+        uint256 paidTime;       
+        uint256 storedTime;     
+        FileStatus status;      
+        bool exists;           
+    }
+
     // State variables
     mapping(uint256 => FileRecord) public files;
     mapping(string => uint256) public cidToFileId;
@@ -39,6 +52,8 @@ contract FileRegistry is Ownable, ReentrancyGuard, Pausable {
 
     uint256 public nextFileId = 1;
     uint256 public totalFiles = 0;
+    uint256 public nextDatasetId = 1;
+    uint256 public totalDatasets = 0;
 
     // Storage pricing (USDFC per byte per epoch)
     uint256 public pricePerByte = 1e12; // 0.000001 USDFC per byte
@@ -73,6 +88,15 @@ contract FileRegistry is Ownable, ReentrancyGuard, Pausable {
     event StoragePriceUpdated(
         uint256 oldPrice,
         uint256 newPrice
+    );
+
+    event DatasetRegistered(
+        uint256 indexed datasetId,
+        string indexed manifestCid,
+        address indexed uploader,
+        uint256 fileCount,
+        uint256 totalSize,
+        uint256 storagePrice
     );
 
     constructor() Ownable(msg.sender) {}
