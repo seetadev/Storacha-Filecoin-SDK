@@ -1,5 +1,7 @@
 import { getSynapse } from "../config/synapse.js";
 import { ethers } from "ethers";
+import { ChatOpenAI } from "@langchain/openai";
+import { PromptTemplate } from "@langchain/core/prompts";
 
 export interface UploadResult {
   pieceCid: string;
@@ -432,5 +434,90 @@ export class StorageService {
       amount: amountWei.toString(),
       paymentTxHash: tx.hash,
       status: "paid"
+    };
+  }
+
+  /**
+   * Decentralized Retrieval-Augmented Generation (dRAG)
+   * Fetches a verified dataset from Filecoin and feeds it to an LLM
+   */
+  async askDataset(datasetId: number, question: string) {
+    console.log(`=== Initiating dRAG for Dataset ID: ${datasetId} ===`);
+
+    // 1. Fetch Dataset Provenance from the Smart Contract
+    const provider = new ethers.JsonRpcProvider(config.filecoin.rpcUrl);
+    const REGISTRY_ABI = ["function getDataset(uint256) external view returns (tuple(string manifestCid, address uploader, uint256 fileCount, uint256 totalSize, uint256 storagePrice, uint256 uploadTime, uint256 paidTime, uint256 storedTime, uint8 status, bool exists))"];
+    const registry = new ethers.Contract(config.filecoin.fileRegistryAddress as string, REGISTRY_ABI, provider);
+    
+    const dataset = await registry.getDataset(datasetId);
+    if (!dataset.exists) throw new Error("Dataset not found on-chain");
+    
+    // Safety check: ensure the dataset was actually paid for
+    if (dataset.status < 1) throw new Error("Dataset payment not confirmed yet");
+
+    console.log(`Verified Master Manifest CID: ${dataset.manifestCid}`);
+
+    // 2. Fetch the Manifest from the Decentralized Network (IPFS/Storacha Gateway)
+    const gatewayUrl = `https://dweb.link/ipfs/${dataset.manifestCid}`;
+    const manifestResponse = await fetch(gatewayUrl);
+    const manifest = await manifestResponse.json();
+
+    // 3. Fetch the actual dataset files to build the AI's Context Window
+    console.log(`Retrieving ${manifest.fileCount} files from warm storage...`);
+    let aggregatedContext = "";
+
+    for (const file of manifest.files) {
+      const fileUrl = `https://dweb.link/ipfs/${file.pieceCid}`;
+      const fileResponse = await fetch(fileUrl);
+      const textContent = await fileResponse.text();
+      aggregatedContext += `\n--- File: ${file.filename} ---\n${textContent}\n`;
+    }
+
+    // Truncate context if it's too massive for the LLM
+    const maxChars = 80000;
+    if (aggregatedContext.length > maxChars) {
+      aggregatedContext = aggregatedContext.substring(0, maxChars) + "... [DATA TRUNCATED]";
+    }
+
+    // 4. LangChain LLM Execution
+    console.log(`Feeding verified data into LLM (Question: "${question}")...`);
+    
+    if (!process.env.OPENAI_API_KEY) {
+        throw new Error("OPENAI_API_KEY is missing from environment variables");
+    }
+
+    const llm = new ChatOpenAI({
+      openAIApiKey: process.env.OPENAI_API_KEY,
+      temperature: 0, // Set to 0 to prevent hallucinations
+      modelName: "gpt-4o-mini" 
+    });
+
+    const prompt = PromptTemplate.fromTemplate(`
+      You are an AI assistant answering questions based STRICTLY on a verified decentralized dataset.
+      If the answer is not contained in the provided context, explicitly say "I cannot answer this based on the provided dataset."
+
+      Dataset Context:
+      {context}
+
+      Question: {question}
+      Answer:
+    `);
+
+    const chain = prompt.pipe(llm);
+    const response = await chain.invoke({
+      context: aggregatedContext,
+      question: question
+    });
+
+    console.log("✅ dRAG Response generated successfully.");
+
+    return {
+      datasetId,
+      provenance: {
+        manifestCid: dataset.manifestCid,
+        filesAnalyzed: manifest.files.map((f: any) => f.filename)
+      },
+      question,
+      answer: response.content
     };
   }

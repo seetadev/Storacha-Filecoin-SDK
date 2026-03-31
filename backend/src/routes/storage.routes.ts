@@ -257,4 +257,24 @@ router.post('/dataset/pay', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+router.post('/dataset/ask', async (req, res) => {
+  try {
+    const { datasetId, question } = req.body;
+
+    if (!datasetId || !question) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Missing datasetId or question in the request body." 
+      });
+    }
+
+    const result = await storageService.askDataset(Number(datasetId), question);
+    
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error("dRAG endpoint error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 export default router;
