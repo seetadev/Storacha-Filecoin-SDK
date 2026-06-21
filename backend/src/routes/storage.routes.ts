@@ -1,10 +1,12 @@
 import { Router, Request, Response, NextFunction } from "express";
 import multer from "multer";
 import { StorageService } from "../services/storage.service.js";
+import { UcanService } from "../services/ucan.service.js";
 import { config } from "../config/env.js";
 
 const router: Router = Router();
 const storageService = new StorageService();
+const ucanService = UcanService.getInstance();
 
 // Configure multer for in-memory storage
 const upload = multer({
@@ -13,6 +15,41 @@ const upload = multer({
     fileSize: config.upload.maxFileSize,
   },
 });
+
+/**
+ * Require UCAN
+ * Verifies that the request has a valid token for the requested file.
+ */
+const requireUcan = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const pieceCid = req.params.pieceCid;
+    const authHeader = req.headers.authorization;
+
+    // 1. Check for Header
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ 
+        success: false, 
+        error: "Unauthorized: Missing UCAN token in Authorization header" 
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    // 2. Verify Token
+    const isAuthorized = await ucanService.verifyRetrievalAccess(token, pieceCid);
+
+    if (!isAuthorized) {
+      return res.status(403).json({ 
+        success: false, 
+        error: "Forbidden: Invalid token or insufficient permissions for this file" 
+      });
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
 
 /**
  * POST /api/storage/upload
@@ -72,6 +109,7 @@ router.post(
  */
 router.get(
   "/download/:pieceCid",
+  requireUcan,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { pieceCid } = req.params;

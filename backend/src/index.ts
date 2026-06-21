@@ -3,6 +3,8 @@ import cors from "cors";
 import { config, validateConfig } from "./config/env.js";
 import { initializeSynapse, cleanupSynapse } from "./config/synapse.js";
 import storageRoutes from "./routes/storage.routes.js";
+import authRoutes from "./routes/auth.routes.js";
+import { UcanService } from "./services/ucan.service.js";
 
 const app = express();
 
@@ -19,7 +21,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Routes
 app.use("/api/storage", storageRoutes);
-
+app.use("/api/auth", authRoutes);
 // Health check
 app.get("/health", (req: Request, res: Response) => {
   res.json({
@@ -76,11 +78,15 @@ async function start() {
     // Initialize Synapse SDK
     await initializeSynapse();
 
+    // Initialize UCAN Identity
+    await UcanService.getInstance().init();
+
     // Start server
     const server = app.listen(config.port, () => {
       console.log("\n Server ready!");
       console.log(` Listening on http://localhost:${config.port}`);
       console.log(` Environment: ${config.nodeEnv}`);
+      console.log("  POST   /api/auth/authorize                 - Get UCAN (Proof of Payment)");
       console.log(
         ` Max file size: ${(config.upload.maxFileSize / 1024 / 1024).toFixed(2)} MB`,
       );
