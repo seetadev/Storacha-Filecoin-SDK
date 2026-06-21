@@ -49,6 +49,7 @@ contract PaymentEscrow is Ownable, ReentrancyGuard, Pausable {
     mapping(uint256 => EscrowRecord) public escrows;
     mapping(uint256 => uint256) public fileToEscrow; // fileId => escrowId
     mapping(address => uint256[]) public userEscrows;
+    mapping(address => uint256) public prepaidBalances;
 
     uint256 public nextEscrowId = 1;
     address public treasury; // Where payments are sent (storage provider)
@@ -125,8 +126,11 @@ contract PaymentEscrow is Ownable, ReentrancyGuard, Pausable {
         require(!isPaid, "PaymentEscrow: File already paid");
 
         // Transfer USDFC from user to this contract
-        usdfc.safeTransferFrom(msg.sender, address(this), amount);
-
+        if (prepaidBalances[msg.sender] >= amount) {
+            prepaidBalances[msg.sender] -= amount;
+        } else {
+            usdfc.safeTransferFrom(msg.sender, address(this), amount);
+        }
         // Create escrow record
         uint256 escrowId = nextEscrowId++;
         EscrowRecord storage escrow = escrows[escrowId];
@@ -322,3 +326,16 @@ contract PaymentEscrow is Ownable, ReentrancyGuard, Pausable {
         usdfc.safeTransfer(owner(), amount);
     }
 }
+
+/**
+     * @dev Fund a prepaid storage subscription
+     * @param amount Amount of USDFC to deposit into the subscription balance
+     */
+    function fundSubscription(uint256 amount) external whenNotPaused nonReentrant {
+        require(amount > 0, "PaymentEscrow: Amount must be greater than 0");
+        
+        usdfc.safeTransferFrom(msg.sender, address(this), amount);
+        prepaidBalances[msg.sender] += amount;
+        
+        emit SubscriptionFunded(msg.sender, amount);
+    }

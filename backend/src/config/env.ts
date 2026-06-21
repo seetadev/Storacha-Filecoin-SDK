@@ -12,6 +12,7 @@ export const config = {
       process.env.FILECOIN_RPC_URL ||
       "https://api.calibration.node.glif.io/rpc/v1",
     glifAuthToken: process.env.GLIF_AUTH_TOKEN,
+    fileRegistryAddress: process.env.FILE_REGISTRY_ADDRESS || "",
   },
 
   upload: {
@@ -27,6 +28,10 @@ export function validateConfig(): void {
 
   if (!config.filecoin.rpcUrl) {
     throw new Error("FILECOIN_RPC_URL is required");
+  }
+
+  if (!config.filecoin.fileRegistryAddress) {
+    throw new Error("FILE_REGISTRY_ADDRESS is required in environment variables");
   }
 
   console.log("Configuration validated");

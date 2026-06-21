@@ -173,4 +173,46 @@ router.post(
   },
 );
 
+/**
+ * @route POST /api/storage/sync-price
+ * @desc Fetch network price via Synapse and update FileRegistry smart contract
+ */
+router.post(
+  "/sync-price",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      console.log("\Syncing Dynamic Storage Price");
+      const result = await storageService.syncStoragePrice();
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      console.error("Sync price endpoint error:", error);
+      next(error);
+    }
+  }
+);
 export default router;
+
+router.post('/subscribe', async (req, res) => {
+  try {
+    const { planSizeGB } = req.body;
+
+    if (!planSizeGB || typeof planSizeGB !== 'number') {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Missing or invalid planSizeGB. Please provide a number." 
+      });
+    }
+
+    // Assuming your StorageService is instantiated as 'storageService'
+    const result = await storageService.subscribeStorage(planSizeGB);
+    
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    console.error("Subscription endpoint error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
